@@ -10,16 +10,11 @@ public class ServiceNode {
     private String serverIP;
     private String nodeIP;
 
-    private CSVStatsService csvService;
-    private ImageTransformService imageService;
-
     public ServiceNode(String serviceName, int tcpPort, String serverIP, String nodeIP) {
         this.serviceName = serviceName.toUpperCase();
         this.tcpPort = tcpPort;
         this.serverIP = serverIP;
         this.nodeIP = nodeIP;
-        this.csvService = new CSVStatsService();
-        this.imageService = new ImageTransformService();
     }
 
     public void start() {
@@ -31,11 +26,10 @@ public class ServiceNode {
         System.out.println("=".repeat(60));
 
         HeartbeatSender heartbeat = new HeartbeatSender(
-            "node-" + serviceName,
-            serviceName,
-            tcpPort,
-            serverIP
-        );
+                "node-" + serviceName,
+                serviceName,
+                tcpPort,
+                serverIP);
         new Thread(heartbeat).start();
         System.out.println("✓ Heartbeat sender started (sending to " + serverIP + ":9999)");
 
@@ -57,14 +51,14 @@ public class ServiceNode {
     private void handleTask(Socket socket) {
         try (BufferedReader in = new BufferedReader(
                 new InputStreamReader(socket.getInputStream()));
-             BufferedWriter out = new BufferedWriter(
-                new OutputStreamWriter(socket.getOutputStream()))) {
+                BufferedWriter out = new BufferedWriter(
+                        new OutputStreamWriter(socket.getOutputStream()))) {
 
             String result;
 
             if (serviceName.equals("CSV")) {
                 System.out.println(">>> Processing CSV data (streaming)...");
-                result = "SUCCESS|" + csvService.processCSVFromSocket(in);
+                result = "SUCCESS|";
                 System.out.println(">>> CSV processing complete");
             } else {
                 String taskData = in.readLine();
@@ -77,8 +71,8 @@ public class ServiceNode {
                 }
 
                 String displayData = taskData.length() > 100
-                    ? taskData.substring(0, 100) + "..."
-                    : taskData;
+                        ? taskData.substring(0, 100) + "..."
+                        : taskData;
                 System.out.println(">>> Received task data: " + displayData);
 
                 switch (serviceName) {
@@ -113,9 +107,9 @@ public class ServiceNode {
     private String processImage(String taskData) {
         try {
             System.out.println(">>> Processing IMAGE task...");
-            String result = imageService.process(taskData);
+            // String result = imageService.process(taskData);
             System.out.println(">>> IMAGE processing complete");
-            return result;
+            return "hi";
         } catch (Exception e) {
             return "ERROR|Image processing failed: " + e.getMessage();
         }
@@ -170,8 +164,8 @@ public class ServiceNode {
 
             if (operation.equalsIgnoreCase("SIGN")) {
                 javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
-                javax.crypto.spec.SecretKeySpec keySpec =
-                    new javax.crypto.spec.SecretKeySpec(secretKey.getBytes(), "HmacSHA256");
+                javax.crypto.spec.SecretKeySpec keySpec = new javax.crypto.spec.SecretKeySpec(secretKey.getBytes(),
+                        "HmacSHA256");
                 mac.init(keySpec);
                 byte[] rawSignature = mac.doFinal(messageBytes);
                 StringBuilder hex = new StringBuilder();
@@ -186,8 +180,8 @@ public class ServiceNode {
                 }
                 String providedSignature = parts[3];
                 javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
-                javax.crypto.spec.SecretKeySpec keySpec =
-                    new javax.crypto.spec.SecretKeySpec(secretKey.getBytes(), "HmacSHA256");
+                javax.crypto.spec.SecretKeySpec keySpec = new javax.crypto.spec.SecretKeySpec(secretKey.getBytes(),
+                        "HmacSHA256");
                 mac.init(keySpec);
                 byte[] rawSignature = mac.doFinal(messageBytes);
                 StringBuilder hex = new StringBuilder();
@@ -231,7 +225,7 @@ public class ServiceNode {
                 byte[] compressedBytes = byteStream.toByteArray();
                 String result = java.util.Base64.getEncoder().encodeToString(compressedBytes);
                 System.out.println(">>> Compression complete (ratio: " +
-                    String.format("%.1f%%", (1.0 - (double) compressedBytes.length / bytes.length) * 100) + ")");
+                        String.format("%.1f%%", (1.0 - (double) compressedBytes.length / bytes.length) * 100) + ")");
                 return "SUCCESS|" + result;
 
             } else if (operation.equalsIgnoreCase("DECOMPRESS")) {

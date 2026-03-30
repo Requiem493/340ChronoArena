@@ -1,4 +1,4 @@
-package edu.qu.microcluster.server;
+package unusedfornow;
 
 import edu.qu.microcluster.services.Base64Service;
 import edu.qu.microcluster.services.CsvStatsService;
@@ -22,7 +22,8 @@ public class ServiceFactory {
     }
 
     public static Service get(String name) {
-        if (name == null) return null;
+        if (name == null)
+            return null;
         return services.get(name.trim().toUpperCase());
     }
 }
