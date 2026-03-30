@@ -1,7 +1,6 @@
 import java.io.*;
 import java.net.*;
 import java.nio.file.*;
-import java.util.Base64;
 import java.util.Scanner;
 
 /**
@@ -65,67 +64,6 @@ public class TCPClient {
                     System.out.println("Unknown service, try again.");
                     continue;
                 }
-                /*
-                 * if (service.equals("IMAGE")) {
-                 * taskRequest = handleImageService(scanner);
-                 * } else if (service.equals("CSV")) {
-                 * taskRequest = handleCSVService(scanner);
-                 * } else if (service.equals("BASE64")) {
-                 * taskRequest = handleBase64Service(scanner);
-                 * } else if (service.equals("HMAC")) {
-                 * taskRequest = handleHMACService(scanner);
-                 * } else if (service.equals("COMPRESSION")) {
-                 * taskRequest = handleCompressionService(scanner);
-                 * } else {
-                 * System.out.println("Unknown service, try again.");
-                 * continue;
-                 * }
-                 */
-
-                /*
-                 * if (taskRequest.startsWith("TASK|CSV|CHUNKED|")) {
-                 * String filePath = taskRequest.substring("TASK|CSV|CHUNKED|".length());
-                 * sendChunkedCSV(filePath, in, out);
-                 * String result = in.readLine();
-                 * System.out.println("\n" + "=".repeat(60));
-                 * System.out.println("RESULT:");
-                 * System.out.println("=".repeat(60));
-                 * if (result != null && result.startsWith("SUCCESS")) {
-                 * handleCSVResult(result);
-                 * } else {
-                 * System.out.println(result);
-                 * }
-                 * } else {
-                 * out.write(taskRequest);
-                 * out.newLine();
-                 * out.flush();
-                 * 
-                 * String result = in.readLine();
-                 * System.out.println("\n" + "=".repeat(60));
-                 * System.out.println("RESULT:");
-                 * System.out.println("=".repeat(60));
-                 * 
-                 * if (service.equals("IMAGE") && result != null &&
-                 * result.startsWith("SUCCESS")) {
-                 * handleImageResult(result);
-                 * } else if (service.equals("BASE64") && result != null &&
-                 * result.startsWith("SUCCESS")) {
-                 * handleBase64Result(result);
-                 * } else if (service.equals("HMAC") && result != null &&
-                 * result.startsWith("SUCCESS")) {
-                 * handleHMACResult(result);
-                 * } else if (service.equals("COMPRESSION") && result != null &&
-                 * result.startsWith("SUCCESS")) {
-                 * handleCompressionResult(result);
-                 * } else if (service.equals("CSV") && result != null &&
-                 * result.startsWith("SUCCESS")) {
-                 * handleCSVResult(result);
-                 * } else {
-                 * System.out.println(result);
-                 * }
-                 * }
-                 */
-
             }
             socket.close();
         } catch (IOException e) {

@@ -1,31 +1,27 @@
 
-
 import java.io.IOException;
 import java.net.*;
+
 /**
  * 
  * @author cjaiswal
  *
- *  
+ * 
  * 
  */
-public class UDPClient 
-{
+public class UDPClient {
     DatagramSocket Socket;
 
-    public UDPClient() 
-    {
+    public UDPClient() {
 
     }
 
-    public void createAndListenSocket() 
-    {
-        try 
-        {
+    public void createAndListenSocket() {
+        try {
             Socket = new DatagramSocket();
             InetAddress IPAddress = InetAddress.getByName("localhost");
             byte[] incomingData = new byte[1024];
-            String sentence = "Viehmann";
+            String sentence = "Hello UDP Server";
             byte[] data = sentence.getBytes();
             DatagramPacket sendPacket = new DatagramPacket(data, data.length, IPAddress, 9876);
             Socket.send(sendPacket);
@@ -35,25 +31,17 @@ public class UDPClient
             String response = new String(incomingPacket.getData());
             System.out.println("Response from server:" + response);
             Socket.close();
-        }
-        catch (UnknownHostException e) 
-        {
+        } catch (UnknownHostException e) {
             e.printStackTrace();
-        } 
-        catch (SocketException e) 
-        {
+        } catch (SocketException e) {
             e.printStackTrace();
-        } 
-        catch (IOException e) 
-        {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public static void main(String[] args) 
-    {
+    public static void main(String[] args) {
         UDPClient client = new UDPClient();
         client.createAndListenSocket();
     }
 }
-
