@@ -1,3 +1,5 @@
+package referencefiles;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.*;
@@ -7,11 +9,11 @@ import java.util.*;
  * 
  * @author aditibaghel9, KFrancis05, help from claude.ai
  */
-public class ClientHandler implements Runnable {
+public class ClientHandler_Old implements Runnable {
     private Socket clientSocket;
     private HeartbeatReceiver heartbeatReceiver;
 
-    public ClientHandler(Socket socket, HeartbeatReceiver hbReceiver) {
+    public ClientHandler_Old(Socket socket, HeartbeatReceiver hbReceiver) {
         this.clientSocket = socket;
         this.heartbeatReceiver = hbReceiver;
     }

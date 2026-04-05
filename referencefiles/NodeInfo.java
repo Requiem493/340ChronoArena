@@ -1,16 +1,19 @@
+package referencefiles;
+
 public class NodeInfo {
     public String nodeName;
     public String serviceName;
     public String ip;
     public int port;
     public long lastSeen;
-/**
- * 
- * @author KFrancis05, help from claude.ai
- *
- *  
- * 
- */
+
+    /**
+     * 
+     * @author KFrancis05, help from claude.ai
+     *
+     * 
+     * 
+     */
     public NodeInfo(String nodeName, String serviceName, String ip, int port) {
         this.nodeName = nodeName;
         this.serviceName = serviceName;

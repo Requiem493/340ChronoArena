@@ -1,3 +1,5 @@
+package referencefiles;
+
 import java.net.*;
 import java.util.*;
 
@@ -50,7 +52,8 @@ public class HeartbeatReceiver implements Runnable {
                 }
 
             } catch (Exception e) {
-                if (running) e.printStackTrace();
+                if (running)
+                    e.printStackTrace();
             }
         }
     }
@@ -65,7 +68,8 @@ public class HeartbeatReceiver implements Runnable {
             long secondsSinceLastSeen = (currentTime - info.lastSeen) / 1000;
 
             if (secondsSinceLastSeen > 120) {
-                System.out.println("Node DEAD: " + info.nodeName + " (silent for " + secondsSinceLastSeen + " seconds)");
+                System.out
+                        .println("Node DEAD: " + info.nodeName + " (silent for " + secondsSinceLastSeen + " seconds)");
                 iterator.remove();
             }
         }
