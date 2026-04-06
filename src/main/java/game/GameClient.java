@@ -29,7 +29,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * - UDPSender inner class — fires MOVE packets to server
  * - LocalGameState inner class — parsed snapshot printed to console(debug
  * purposes only)
- * 
  *
  * Threads:
  * main thread → handles console input (Scanner)
@@ -70,87 +69,93 @@ public class GameClient {
 
     public static void main(String[] args) throws Exception {
 
-        // 1. Load properties
-        loadProperties();
-
-        // 2. Ask player name via console
-        Scanner scanner = new Scanner(System.in);
-        System.out.print("Enter your player name: ");
-        String name = scanner.nextLine().trim();
-        if (name.isBlank()) {
-            System.out.println("No name entered. Exiting.");
-            scanner.close();
+        // 1. Read server IP from command line argument
+        if (args.length < 1) {
+            System.out.println("Usage: java -jar gameclient.jar <serverIP>");
+            System.out.println("Example: java -jar gameclient.jar 192.168.1.10");
             return;
         }
-        myName = name;
+        serverIP = args[0];
 
-        // 3. Connect TCP
-        System.out.println("Connecting to " + serverIP + ":" + tcpPort + " ...");
-        tcpSocket = new Socket(serverIP, tcpPort);
-        tcpSocket.setKeepAlive(true);
-        tcpSocket.setTcpNoDelay(true);
+        // 2. Use try-with-resources so Scanner, Socket, and DatagramSocket
+        // are always closed on exit — even on early returns or exceptions
+        try (Scanner scanner = new Scanner(System.in);
+                Socket socket = new Socket(serverIP, tcpPort);
+                DatagramSocket dgram = new DatagramSocket()) {
 
-        tcpOut = new BufferedWriter(new OutputStreamWriter(tcpSocket.getOutputStream()));
-        BufferedReader tcpIn = new BufferedReader(
-                new InputStreamReader(tcpSocket.getInputStream()));
+            tcpSocket = socket;
+            udpSocket = dgram;
+            tcpSocket.setKeepAlive(true);
+            tcpSocket.setTcpNoDelay(true);
 
-        // 4. Send JOIN
-        writeTCP("JOIN|" + myName);
+            // 3. Ask player name via console
+            System.out.print("Enter your player name: ");
+            String name = scanner.nextLine().trim();
+            if (name.isBlank()) {
+                System.out.println("No name entered. Exiting.");
+                return;
+            }
+            myName = name;
 
-        // 5. Read JOIN_OK|<playerID>|<name>
-        String joinReply = tcpIn.readLine();
-        if (joinReply == null || !joinReply.startsWith("JOIN_OK|")) {
-            System.out.println("Server rejected join: " + joinReply);
-            scanner.close();
-            return;
-        }
-        String[] joinParts = joinReply.split("\\|");
-        myPlayerID = joinParts[1];
-        System.out.println("Joined successfully — you are " + myName + " [" + myPlayerID + "]");
+            // 4. Connect TCP streams
+            System.out.println("Connecting to " + serverIP + ":" + tcpPort + " ...");
+            tcpOut = new BufferedWriter(new OutputStreamWriter(tcpSocket.getOutputStream()));
+            BufferedReader tcpIn = new BufferedReader(
+                    new InputStreamReader(tcpSocket.getInputStream()));
 
-        // 6. Open UDP socket
-        udpSocket = new DatagramSocket();
-        serverAddr = InetAddress.getByName(serverIP);
+            // 5. Send JOIN
+            writeTCP("JOIN|" + myName);
 
-        // 7. Start TCP listener thread
-        Thread tcpThread = new Thread(new TCPListener(tcpIn));
-        tcpThread.setDaemon(true);
-        tcpThread.setName("TCP-Listener");
-        tcpThread.start();
+            // 6. Read JOIN_OK|<playerID>|<n>
+            String joinReply = tcpIn.readLine();
+            if (joinReply == null || !joinReply.startsWith("JOIN_OK|")) {
+                System.out.println("Server rejected join: " + joinReply);
+                return;
+            }
+            String[] joinParts = joinReply.split("\\|");
+            myPlayerID = joinParts[1];
+            System.out.println("Joined successfully — you are " + myName + " [" + myPlayerID + "]");
 
-        // 8. Print controls
-        printControls();
+            // 7. Resolve server address for UDP
+            serverAddr = InetAddress.getByName(serverIP);
 
-        // 9. Console input loop
-        UDPSender udp = new UDPSender();
+            // 8. Start TCP listener thread
+            Thread tcpThread = new Thread(new TCPListener(tcpIn));
+            tcpThread.setDaemon(true);
+            tcpThread.setName("TCP-Listener");
+            tcpThread.start();
 
-        while (true) {
-            String input = scanner.nextLine().trim().toLowerCase();
+            // 9. Print controls
+            printControls();
 
-            if (input.isBlank())
-                continue;
+            // 10. Console input loop
+            UDPSender udp = new UDPSender();
 
-            switch (input) {
-                case "w" -> udp.sendMove(0, -1);
-                case "s" -> udp.sendMove(0, 1);
-                case "a" -> udp.sendMove(-1, 0);
-                case "d" -> udp.sendMove(1, 0);
-                case "wa", "aw" -> udp.sendMove(-1, -1);
-                case "wd", "dw" -> udp.sendMove(1, -1);
-                case "sa", "as" -> udp.sendMove(-1, 1);
-                case "sd", "ds" -> udp.sendMove(1, 1);
-                // case "f" -> freezeNearest(udp);
-                case "state" -> printState();
-                case "help" -> printControls();
-                case "quit", "exit", "q" -> {
-                    writeTCP("QUIT");
-                    System.out.println("Leaving game. Goodbye!");
-                    udpSocket.close();
-                    tcpSocket.close();
-                    scanner.close();
-                    return;
+            while (true) {
+                String input = scanner.nextLine().trim().toLowerCase();
+
+                if (input.isBlank())
+                    continue;
+
+                switch (input) {
+                    case "w" -> udp.sendMove(0, -1);
+                    case "s" -> udp.sendMove(0, 1);
+                    case "a" -> udp.sendMove(-1, 0);
+                    case "d" -> udp.sendMove(1, 0);
+                    case "wa", "aw" -> udp.sendMove(-1, -1);
+                    case "wd", "dw" -> udp.sendMove(1, -1);
+                    case "sa", "as" -> udp.sendMove(-1, 1);
+                    case "sd", "ds" -> udp.sendMove(1, 1);
+                    // case "f" -> freezeNearest(udp);
+                    case "state" -> printState();
+                    case "help" -> printControls();
+                    case "quit", "exit", "q" -> {
+                        writeTCP("QUIT");
+                        System.out.println("Leaving game. Goodbye!");
+                        return; // try-with-resources closes everything
+                    }
+                    default -> System.out.println("Unknown command. Type 'help' for controls.");
                 }
-                default -> System.out.println("Unknown command. Type 'help' for controls.");
             }
         }
     }
@@ -221,44 +226,28 @@ public class GameClient {
         private final AtomicLong seq = new AtomicLong(0);
 
         void sendMove(int dx, int dy) {
-            if (myPlayerID == null)
-                return;
-            String msg = seq.incrementAndGet() + "|" + myPlayerID
-                    + "|MOVE|" + dx + "|" + dy;
-            sendUDP(msg);
-            System.out.println("[MOVE] dx=" + dx + " dy=" + dy + " sent.");
+            send("MOVE|" + dx + "|" + dy);
         }
 
-        /*
-         * If we decide to do Freeze
-         * void sendFreeze(String targetID) {
-         * if (myPlayerID == null)
-         * return;
-         * String msg = seq.incrementAndGet() + "|" + myPlayerID
-         * + "|FREEZE|" + targetID;
-         * sendUDP(msg);
-         * System.out.println("[FREEZE] Targeting " + targetID);
-         * }
-         */
-
-        private void sendUDP(String message) {
+        private void send(String action) {
+            if (myPlayerID == null)
+                return;
+            String msg = seq.incrementAndGet() + "|" + myPlayerID + "|" + action;
             try {
-                byte[] data = message.getBytes();
-                DatagramPacket packet = new DatagramPacket(
-                        data, data.length, serverAddr, udpPort);
-                udpSocket.send(packet);
+                byte[] data = msg.getBytes();
+                DatagramPacket pkt = new DatagramPacket(data, data.length, serverAddr, udpPort);
+                udpSocket.send(pkt);
             } catch (IOException e) {
                 System.err.println("[UDP] Send failed: " + e.getMessage());
             }
         }
     }
 
-    // LOCAL GAME STATE
+    // LOCAL GAME STATE (parsed from STATE broadcast)
 
     static class LocalGameState {
         long timeRemainingMs = 0;
         boolean isFinal = false;
-
         Map<String, PlayerData> players = new LinkedHashMap<>();
         List<ZoneData> zones = new ArrayList<>();
         List<ItemData> items = new ArrayList<>();
@@ -387,49 +376,6 @@ public class GameClient {
         System.out.println("---");
     }
 
-    /*
-     * static void freezeNearest(UDPSender udp) {
-     * LocalGameState s = localState;
-     * LocalGameState.PlayerData me = s.players.get(myPlayerID);
-     * 
-     * if (me == null) {
-     * System.out.println("[FREEZE] Not in game yet.");
-     * return;
-     * }
-     * if (!me.hasWeapon) {
-     * System.out.println("[FREEZE] No weapon — pick up a WEAPON item first.");
-     * return;
-     * }
-     * 
-     * String nearestID = null;
-     * double nearestDist = Double.MAX_VALUE;
-     * 
-     * for (LocalGameState.PlayerData p : s.players.values()) {
-     * if (p.id.equals(myPlayerID))
-     * continue;
-     * double dist = Math.hypot(me.x - p.x, me.y - p.y);
-     * if (dist < nearestDist) {
-     * nearestDist = dist;
-     * nearestID = p.id;
-     * }
-     * }
-     * 
-     * 
-     * if (nearestID == null) {
-     * System.out.println("[FREEZE] No other players found.");
-     * } else if (nearestDist > 80) {
-     * System.out.
-     * printf("[FREEZE] Nearest player (%s) is too far (%.0f px, need <=80).%n",
-     * nearestID, nearestDist);
-     * } else {
-     * udp.sendFreeze(nearestID);
-     * }
-     * 
-     * 
-     * }
-     * 
-     */
-
     static void printControls() {
         System.out.println("\n" + "=".repeat(40));
         System.out.println("  ChronoArena Controls");
@@ -473,9 +419,7 @@ public class GameClient {
                 System.err.println("[Client] Could not read game.properties — using defaults");
             }
         } else {
-            System.out.println("[Client] game.properties not found — using defaults");
+            System.out.println("[Client] game.properties not found — will prompt for IP");
         }
-        System.out.println("[Client] Server: " + serverIP
-                + "  TCP:" + tcpPort + "  UDP:" + udpPort);
     }
 }

@@ -6,8 +6,8 @@ import java.net.*;
 /**
  * MainServer - Entry point for the ChronoArena game server.
  *
- * Usage: java MainServer <tcpPort> <udpPort> <roundSeconds>
- * Example: java MainServer 8000 9000 180
+ * Usage: java MainServer <ip> <tcpPort> <udpPort> <roundSeconds>
+ * Example: java MainServer 192.168.1.10 8000 9000 180
  *
  * Protocol summary:
  * TCP (clients -> server): JOIN|<playerName>
@@ -25,18 +25,22 @@ public class MainServer {
     public static void main(String[] args) throws IOException {
 
         // ── 1. Parse args ─────────────────────────────────────────────────────
-        if (args.length < 3) {
-            System.out.println("Usage: java MainServer <tcpPort> <udpPort> <roundSeconds>");
-            System.out.println("Example: java MainServer 8000 9000 180");
+        if (args.length < 4) {
+            System.out.println("Usage: java MainServer <ip> <tcpPort> <udpPort> <roundSeconds>");
+            System.out.println("Example: java MainServer 192.168.1.10 8000 9000 180");
             return;
         }
 
-        int tcpPort = Integer.parseInt(args[0]);
-        int udpPort = Integer.parseInt(args[1]);
-        long roundSecs = Long.parseLong(args[2]);
+        String ip = args[0]; // e.g. "192.168.1.10"
+        int tcpPort = Integer.parseInt(args[1]);
+        int udpPort = Integer.parseInt(args[2]);
+        long roundSecs = Long.parseLong(args[3]);
+
+        InetAddress bindAddress = InetAddress.getByName(ip);
 
         System.out.println("=".repeat(55));
         System.out.println("  ChronoArena Server");
+        System.out.println("  Bind IP  : " + ip);
         System.out.println("  TCP port : " + tcpPort);
         System.out.println("  UDP port : " + udpPort);
         System.out.println("  Round    : " + roundSecs + "s");
@@ -47,11 +51,11 @@ public class MainServer {
         gameLoop = new GameLoop(gameState);
 
         // ── 3. UDP action receiver ────────────────────────────────────────────
-        Thread udpThread = new Thread(new UDPReceiver(gameState, udpPort));
+        Thread udpThread = new Thread(new UDPReceiver(gameState, udpPort, bindAddress));
         udpThread.setDaemon(true);
         udpThread.setName("UDP-Receiver");
         udpThread.start();
-        System.out.println("[Server] UDP receiver started on port " + udpPort);
+        System.out.println("[Server] UDP receiver started on " + ip + ":" + udpPort);
 
         // ── 4. Game loop ──────────────────────────────────────────────────────
         Thread loopThread = new Thread(gameLoop);
@@ -66,20 +70,22 @@ public class MainServer {
         adminThread.setName("Admin-Console");
         adminThread.start();
 
-        // ── 6. TCP accept loop ────────────────────────────────────────────────
-        try (ServerSocket serverSocket = new ServerSocket(tcpPort)) {
-            System.out.println("[Server] Listening for players on TCP " + tcpPort + "\n");
+        // ── 6. TCP accept loop — bind to the specified IP ─────────────────────
+        ServerSocket serverSocket = new ServerSocket();
+        serverSocket.setReuseAddress(true);
+        serverSocket.bind(new InetSocketAddress(bindAddress, tcpPort), 50);
+        System.out.println("[Server] Listening for players on " + ip + ":" + tcpPort + "\n");
 
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("[Server] New connection from "
-                        + clientSocket.getRemoteSocketAddress());
+        while (true) {
+            Socket clientSocket = serverSocket.accept();
+            System.out.println("[Server] New connection from "
+                    + clientSocket.getRemoteSocketAddress());
 
-                Thread t = new Thread(new ClientHandler(clientSocket, gameState, gameLoop));
-                t.setDaemon(true);
-                t.start();
-            }
+            Thread t = new Thread(new ClientHandler(clientSocket, gameState, gameLoop));
+            t.setDaemon(true);
+            t.start();
         }
+
     }
 
     // ── Admin console (KILL_SWITCH) ───────────────────────────────────────────

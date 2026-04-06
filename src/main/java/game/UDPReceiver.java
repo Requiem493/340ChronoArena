@@ -3,7 +3,7 @@ package game;
 import java.net.*;
 
 /**
- * UDPActionReceiver - Listens for player action packets on a UDP port.
+ * UDPReceiver - Listens for player action packets on a specific IP+port.
  *
  * Each UDP packet from a game client has the format:
  * <seq>|<playerID>|<ACTION>|<params...>
@@ -12,32 +12,31 @@ import java.net.*;
  * 42|P1|MOVE|1|0 → P1 moves right
  * 43|P1|MOVE|-1|1 → P1 moves left+down
  *
- * This class simply receives packets and hands them to
- * GameState.enqueueAction()
- * which handles sequence-number deduplication and out-of-order dropping.
- *
  * @author aditibaghel9, KFrancis05, help from claude.ai
  */
 public class UDPReceiver implements Runnable {
 
-    private GameState gameState;
-    private int port;
+    private final GameState gameState;
+    private final int port;
+    private final InetAddress bindAddress;
     private volatile boolean running = true;
 
     private static final int BUFFER_SIZE = 512;
 
-    public UDPReceiver(GameState gameState, int port) {
+    public UDPReceiver(GameState gameState, int port, InetAddress bindAddress) {
         this.gameState = gameState;
         this.port = port;
+        this.bindAddress = bindAddress;
     }
 
     @Override
     public void run() {
-        try (DatagramSocket socket = new DatagramSocket(port)) {
+        try (DatagramSocket socket = new DatagramSocket(port, bindAddress)) {
             socket.setSoTimeout(1000); // wake up every second to check `running`
             byte[] buffer = new byte[BUFFER_SIZE];
 
-            System.out.println("[UDP] Action receiver listening on port " + port);
+            System.out.println("[UDP] Action receiver listening on "
+                    + bindAddress.getHostAddress() + ":" + port);
 
             while (running) {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -45,7 +44,6 @@ public class UDPReceiver implements Runnable {
                     socket.receive(packet);
                     String raw = new String(packet.getData(), 0, packet.getLength()).trim();
 
-                    // Basic sanity check before handing off
                     if (!raw.isEmpty()) {
                         gameState.enqueueAction(raw);
                     }
