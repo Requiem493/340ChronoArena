@@ -1,0 +1,6 @@
+{
+    "java.project.referencedLibraries": [
+        "javafx-sdk-26/lib/*.jar"
+    ],
+    "java.configuration.updateBuildConfiguration": "automatic"
+}

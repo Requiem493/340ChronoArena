@@ -62,7 +62,7 @@
                             <transformers>
                                 <transformer
                                     implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>game.Mainserver</mainClass>
+                                    <mainClass>game.MainServer</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>
@@ -80,7 +80,7 @@
                             <transformers>
                                 <transformer
                                     implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>game.GUI</mainClass>
+                                    <mainClass>gui.GUI</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>
@@ -106,6 +106,14 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-maven-plugin</artifactId>
+            <version>0.0.8</version>
+            <configuration>
+            <mainClass>gui.GUI</mainClass>
+            </configuration>
+        </plugin>
         </plugins>
     </build>
 </project>
