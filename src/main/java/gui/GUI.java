@@ -8,6 +8,7 @@ import java.awt.GridBagLayout;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
@@ -20,6 +21,9 @@ public class GUI {
         frame = new JFrame("Chrono Arena");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(1200, 800);
+
+        JLabel title = new JLabel("Welcome to Chrono Arena!", JLabel.CENTER);
+        title.setFont(new Font("DialogInput", Font.BOLD, 50));
 
         startButton = new JButton("Start Game");
         startButton.setFont(new Font("DialogInput", Font.BOLD, 24));
@@ -37,6 +41,7 @@ public class GUI {
         panel.setBackground(new Color(140, 184, 255));
         panel.add(startButton);
 
+        frame.add(title, BorderLayout.NORTH);
         frame.add(panel, BorderLayout.CENTER);
         frame.setLocationRelativeTo(null); // centers window on screen
         frame.setVisible(true);

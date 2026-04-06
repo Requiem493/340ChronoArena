@@ -1,0 +1,15 @@
+@font-face {
+    font-family: 'Fleftex';
+    src: url("fonts/Fleftex_M.ttf");
+}
+
+.startButton{
+    -fx-background-color: #05adf5;
+    -fx-background-radius: 30 30 30 30;
+    -fx-font-size: 20px;
+    -fx-padding: 15 40 15 40;
+    -fx-min-width: 200px;
+    -fx-min-height: 60px;
+    -fx-font-size: 20px;
+    -fx-font-family: 'Fleftex';
+}
