@@ -13,6 +13,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
@@ -24,6 +25,7 @@ public class GUI {
     private JButton startButton;
 
     public GUI() {
+        
         frame = new JFrame("Chrono Arena");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(1200, 800);
@@ -31,13 +33,23 @@ public class GUI {
         JLabel title = new JLabel("Welcome to Chrono Arena!", JLabel.CENTER);
         title.setFont(new Font("DialogInput", Font.BOLD, 50));
 
+        JLabel nameLabel, ipLabel;
+        
         JTextField textBox = new JTextField(20);
         textBox.setBounds(495,250,200,50);
         frame.add(textBox);
 
-        JTextField IPtextBox = new JTextField(20);
+        nameLabel = new JLabel("Name");
+        nameLabel.setBounds(300, 215, 100, 350);
+        frame.add(nameLabel);
+
+        JPasswordField IPtextBox = new JPasswordField(20);
         IPtextBox.setBounds(495,300,200,50);
         frame.add(IPtextBox);
+
+        ipLabel = new JLabel("IP");
+        ipLabel.setBounds(560, 215, 100, 350);
+        frame.add(ipLabel);
 
         //GameClient.serverIP = IP;
 
