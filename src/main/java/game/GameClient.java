@@ -43,9 +43,10 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class GameClient {
 
-    static String serverIP;
+    public static String serverIP;
     static int tcpPort = 8000;
     static int udpPort = 9000;
+    public static String name = ""; 
 
     // tcp port should be 8000, udp port should be 9000, server IP can change
     public GameClient(String IP) {
@@ -88,13 +89,15 @@ public class GameClient {
             tcpSocket.setKeepAlive(true);
             tcpSocket.setTcpNoDelay(true);
 
+            /* 
             // 3. Ask player name via console
             System.out.print("Enter your player name: ");
-            String name = scanner.nextLine().trim();
+            name = scanner.nextLine().trim();
             if (name.isBlank()) {
                 System.out.println("No name entered. Exiting.");
                 return;
             }
+                */
             myName = name;
 
             // 4. Connect TCP streams
@@ -403,7 +406,7 @@ public class GameClient {
         }
     }
 
-    static void loadProperties() {
+    public static void loadProperties() {
         Properties props = new Properties();
         File file = new File("game.properties");
         if (file.exists()) {

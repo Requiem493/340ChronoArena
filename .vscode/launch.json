@@ -6,6 +6,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "GameClient",
+            "request": "launch",
+            "mainClass": "game.GameClient",
+            "projectName": "microcluster"
+        },
+        {
+            "type": "java",
             "name": "GUI",
             "request": "launch",
             "mainClass": "gui.GUI",

@@ -5,12 +5,18 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+
+import game.GameClient;
 
 public class GUI {
 
@@ -24,6 +30,16 @@ public class GUI {
 
         JLabel title = new JLabel("Welcome to Chrono Arena!", JLabel.CENTER);
         title.setFont(new Font("DialogInput", Font.BOLD, 50));
+
+        JTextField textBox = new JTextField(20);
+        textBox.setBounds(495,250,200,50);
+        frame.add(textBox);
+
+        JTextField IPtextBox = new JTextField(20);
+        IPtextBox.setBounds(495,300,200,50);
+        frame.add(IPtextBox);
+
+        //GameClient.serverIP = IP;
 
         startButton = new JButton("Start Game");
         startButton.setFont(new Font("DialogInput", Font.BOLD, 24));
@@ -39,12 +55,42 @@ public class GUI {
         // Center the button
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(new Color(140, 184, 255));
+        panel.add(textBox);
+        panel.add(IPtextBox);
         panel.add(startButton);
 
         frame.add(title, BorderLayout.NORTH);
         frame.add(panel, BorderLayout.CENTER);
         frame.setLocationRelativeTo(null); // centers window on screen
+        GameClient.loadProperties(); // loads serverIP from file
+        IPtextBox.setText(GameClient.serverIP); // pre-fills the box
         frame.setVisible(true);
+
+        startButton.addActionListener(new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent event) {
+
+            String playerInput = textBox.getText().trim();
+            String IP = IPtextBox.getText().trim();
+
+            if (playerInput.isEmpty() || IP.isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Please fill in all fields!");
+                return;
+            }
+            else{
+                GameClient.name = playerInput;
+                String finalIP = IP;
+                new Thread(() -> {
+                    try {
+                        GameClient.main(new String[]{finalIP});
+                    } catch (Exception e) {
+                        SwingUtilities.invokeLater(() ->
+                            JOptionPane.showMessageDialog(null, "Could not connect!"));
+                    }
+                }).start(); 
+            }
+        }
+        });  
     }
 
     public static void main(String[] args) {
