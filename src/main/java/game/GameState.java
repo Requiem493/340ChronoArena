@@ -1,12 +1,19 @@
 package game;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * GameState - Authoritative server-side game state.
  *
- * Authoritative game-state and rules for ChronoArena.
+ * Freeze, speed boost, and weapon handling removed to match GameClient.
+ * Only MOVE action and ENERGY item remain.
  *
  * @author Requiem493, help from claude.ai
  */
@@ -22,7 +29,6 @@ public class GameState {
     // Timing
     private final long roundDurationMs;
     private long roundStartTime;
-    private volatile boolean roundStarted = false;
     private volatile boolean running = false;
 
     // Players: playerID -> PlayerState
@@ -34,14 +40,11 @@ public class GameState {
 
     // Items
     private static final int MAX_ITEMS_ON_MAP = 8;
-    private static final long MIN_ENERGY_SPAWN_MS = 4000;
-    private static final long MAX_ENERGY_SPAWN_MS = 6000;
-    private static final long FREEZE_RAY_SPAWN_MS = 10_000;
-    private static final int MAX_FREEZE_RAYS_ON_MAP = 2;
-    private final List<Item> items = new CopyOnWriteArrayList<>();
+    private static final long MIN_ITEM_SPAWN_MS = 4000;
+    private static final long MAX_ITEM_SPAWN_MS = 6000;
+    private final List<Item> items = Collections.synchronizedList(new ArrayList<>());
     private final Random rng = new Random();
-    private long nextEnergySpawnInMs = randomEnergySpawnDelayMs();
-    private long nextFreezeRaySpawnInMs = FREEZE_RAY_SPAWN_MS;
+    private long nextItemSpawnInMs = randomSpawnDelayMs();
 
     // Action queue — UDP thread enqueues, GameLoop drains each tick
     private final ConcurrentLinkedQueue<String> actionQueue = new ConcurrentLinkedQueue<>();
@@ -130,26 +133,16 @@ public class GameState {
     // GAME LIFECYCLE
     // ══════════════════════════════════════════════════════════════════════════
 
-    public synchronized void startRound() {
-        if (roundStarted) {
-            return;
-        }
-
-        roundStarted = true;
+    public void startRound() {
         roundStartTime = System.currentTimeMillis();
         running = true;
         spawnItems(5);
-        nextEnergySpawnInMs = randomEnergySpawnDelayMs();
-        nextFreezeRaySpawnInMs = FREEZE_RAY_SPAWN_MS;
+        nextItemSpawnInMs = randomSpawnDelayMs();
         System.out.println("[GameState] Round started. Duration: "
                 + (roundDurationMs / 1000) + "s");
     }
 
-    public synchronized void endRound() {
-        if (!roundStarted || !running) {
-            return;
-        }
-
+    public void endRound() {
         running = false;
         System.out.println("[GameState] Round ended.");
     }
@@ -158,18 +151,7 @@ public class GameState {
         return running;
     }
 
-    public boolean hasRoundStarted() {
-        return roundStarted;
-    }
-
-    public boolean hasRoundEnded() {
-        return roundStarted && !running;
-    }
-
     public long timeRemainingMs() {
-        if (!roundStarted) {
-            return roundDurationMs;
-        }
         if (!running)
             return 0;
         return Math.max(0, roundDurationMs - (System.currentTimeMillis() - roundStartTime));
@@ -217,21 +199,16 @@ public class GameState {
         }
     }
 
-    /** Spawn energy and freeze rays on separate timers, up to the map cap. */
+    /** Spawn one new item every 4-6 seconds, up to the map cap. */
     public void maybeSpawnItem(long tickMs) {
-        nextEnergySpawnInMs -= tickMs;
-        if (nextEnergySpawnInMs <= 0) {
-            if (items.size() < MAX_ITEMS_ON_MAP) {
-                spawnItem(Item.Type.ENERGY);
-            }
-            nextEnergySpawnInMs = randomEnergySpawnDelayMs();
+        nextItemSpawnInMs -= tickMs;
+        if (nextItemSpawnInMs > 0) {
+            return;
         }
 
-        nextFreezeRaySpawnInMs -= tickMs;
-        if (nextFreezeRaySpawnInMs <= 0) {
-            if (items.size() < MAX_ITEMS_ON_MAP)
-                spawnFreezeRayIfPossible();
-            nextFreezeRaySpawnInMs = FREEZE_RAY_SPAWN_MS;
+        if (items.size() < MAX_ITEMS_ON_MAP) {
+            spawnItems(1);
+            nextItemSpawnInMs = randomSpawnDelayMs();
         }
     }
 
@@ -262,16 +239,18 @@ public class GameState {
         }
 
         // Check item pickup
-        for (Item item : new ArrayList<>(items)) {
+        List<Item> toRemove = new ArrayList<>();
+        for (Item item : items) {
             if (item.overlaps(p.x, p.y)) {
                 applyItem(p, item);
-                items.remove(item);
-                System.out.println("[GameState] " + p.name + " picked up " + item.type);
+                toRemove.add(item);
             }
         }
-    }
+        items.removeAll(toRemove);
+        }
 
     private void applyItem(PlayerState p, Item item) {
+        // Only ENERGY exists — +15 pts
         if (item.type == Item.Type.ENERGY) {
             p.score += 15;
         } else if (item.type == Item.Type.FREEZE_RAY) {
@@ -461,45 +440,16 @@ public class GameState {
     private void spawnItems(int count) {
         int itemsToSpawn = Math.min(count, MAX_ITEMS_ON_MAP - items.size());
         for (int i = 0; i < itemsToSpawn; i++) {
-            Item.Type type = shouldSpawnFreezeRay() ? Item.Type.FREEZE_RAY : Item.Type.ENERGY;
-            if (type == Item.Type.FREEZE_RAY) {
-                spawnFreezeRayIfPossible();
-            } else {
-                spawnItem(Item.Type.ENERGY);
-            }
+            int x = 20 + rng.nextInt(MAP_WIDTH - 40);
+            int y = 20 + rng.nextInt(MAP_HEIGHT - 40);
+            Item.Type type = rng.nextInt(4) == 0 ? Item.Type.FREEZE_RAY : Item.Type.ENERGY;
+            items.add(new Item(type, x, y));
         }
     }
 
-    private boolean shouldSpawnFreezeRay() {
-        return countItemsOfType(Item.Type.FREEZE_RAY) < MAX_FREEZE_RAYS_ON_MAP && rng.nextInt(4) == 0;
-    }
-
-    private void spawnFreezeRayIfPossible() {
-        if (countItemsOfType(Item.Type.FREEZE_RAY) >= MAX_FREEZE_RAYS_ON_MAP) {
-            return;
-        }
-        spawnItem(Item.Type.FREEZE_RAY);
-    }
-
-    private void spawnItem(Item.Type type) {
-        int x = 20 + rng.nextInt(MAP_WIDTH - 40);
-        int y = 20 + rng.nextInt(MAP_HEIGHT - 40);
-        items.add(new Item(type, x, y));
-    }
-
-    private int countItemsOfType(Item.Type type) {
-        int count = 0;
-        for (Item item : items) {
-            if (item.type == type) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private long randomEnergySpawnDelayMs() {
-        return MIN_ENERGY_SPAWN_MS
-                + rng.nextInt((int) (MAX_ENERGY_SPAWN_MS - MIN_ENERGY_SPAWN_MS + 1));
+    private long randomSpawnDelayMs() {
+        return MIN_ITEM_SPAWN_MS
+                + rng.nextInt((int) (MAX_ITEM_SPAWN_MS - MIN_ITEM_SPAWN_MS + 1));
     }
 
     public List<Zone> getZones() {

@@ -24,6 +24,7 @@ public class GUI {
 
     private JFrame frame;
     private JButton startButton;
+    private JButton howtoButton;
 
     public GUI() {
         
@@ -41,7 +42,7 @@ public class GUI {
         frame.add(textBox);
 
         nameLabel = new JLabel("Name");
-        nameLabel.setBounds(300, 215, 100, 350);
+        nameLabel.setBounds(150, 215, 100, 350);
         frame.add(nameLabel);
 
         JPasswordField IPtextBox = new JPasswordField(20);
@@ -49,7 +50,7 @@ public class GUI {
         frame.add(IPtextBox);
 
         ipLabel = new JLabel("IP");
-        ipLabel.setBounds(560, 215, 100, 350);
+        ipLabel.setBounds(415, 215, 100, 350);
         frame.add(ipLabel);
 
         //GameClient.serverIP = IP;
@@ -58,6 +59,10 @@ public class GUI {
         startButton.setFont(new Font("DialogInput", Font.BOLD, 24));
         startButton.setPreferredSize(new Dimension(300, 80));
 
+        howtoButton = new JButton("How To Play");
+        howtoButton.setFont(new Font("DialogInput", Font.BOLD, 24));
+        howtoButton.setPreferredSize(new Dimension(300, 80));
+
         // Style the button
         startButton.setBackground(new Color(40, 40, 40));
         startButton.setForeground(Color.BLACK);
@@ -65,12 +70,19 @@ public class GUI {
         startButton.setBorderPainted(true);
         startButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
+        howtoButton.setBackground(new Color(40, 40, 40));
+        howtoButton.setForeground(Color.BLACK);
+        howtoButton.setFocusPainted(false);
+        howtoButton.setBorderPainted(true);
+        howtoButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
         // Center the button
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(new Color(140, 184, 255));
         panel.add(textBox);
         panel.add(IPtextBox);
         panel.add(startButton);
+        panel.add(howtoButton);
 
         frame.add(title, BorderLayout.NORTH);
         frame.add(panel, BorderLayout.CENTER);
@@ -108,6 +120,15 @@ public class GUI {
             }
         }
         });  
+
+        howtoButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+    
+                JOptionPane.showMessageDialog(null, "Movements:\nW/Up Arrow: Up\nA/Left Arrow: Left\nS/Down Arrow: Down\nD/Right Arrow: Right\nWeapons:\nFreeze Ray: Freezes nearest player");
+                    return;
+            }
+            });
     }
 
     private void showArenaScreen() {
