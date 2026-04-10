@@ -180,7 +180,7 @@ public class GameClient {
                     if (line.startsWith("STATE|")) {
                         localState = LocalGameState.parse(line);
                     } else if (line.startsWith("FINAL|")) {
-                        localState = LocalGameState.parseFinal(line);
+                        localState = LocalGameState.parseFinal(line, localState);
                         printFinalScores(line);
                     } else if (line.startsWith("KILLED|")) {
                         System.out.println("\n[SERVER] You were removed: " + line.substring(7));
@@ -252,6 +252,7 @@ public class GameClient {
         public Map<String, PlayerData> players = new LinkedHashMap<>();
         public List<ZoneData> zones = new ArrayList<>();
         public List<ItemData> items = new ArrayList<>();
+        public List<FinalScoreData> finalScores = new ArrayList<>();
 
         public static class PlayerData {
             public String id, name;
@@ -267,6 +268,11 @@ public class GameClient {
         public static class ItemData {
             public String id, type;
             public int x, y;
+        }
+
+        public static class FinalScoreData {
+            public String name;
+            public int score;
         }
 
         // STATE|<timeMs>|PLAYERS:<p,...>|ZONES:<z,...>|ITEMS:<i,...>
@@ -334,9 +340,36 @@ public class GameClient {
             return s;
         }
 
-        static LocalGameState parseFinal(String line) {
+        static LocalGameState parseFinal(String line, LocalGameState previousState) {
             LocalGameState s = new LocalGameState();
             s.isFinal = true;
+            s.timeRemainingMs = 0;
+
+            if (previousState != null) {
+                s.players.putAll(previousState.players);
+                s.zones.addAll(previousState.zones);
+                s.items.addAll(previousState.items);
+            }
+
+            try {
+                String data = line.substring("FINAL|".length());
+                if (!data.isEmpty()) {
+                    for (String entry : data.split(",")) {
+                        String[] parts = entry.split(":");
+                        if (parts.length < 2) {
+                            continue;
+                        }
+
+                        FinalScoreData score = new FinalScoreData();
+                        score.name = parts[0];
+                        score.score = Integer.parseInt(parts[1]);
+                        s.finalScores.add(score);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[Parse] Bad FINAL line: " + e.getMessage());
+            }
+
             return s;
         }
     }

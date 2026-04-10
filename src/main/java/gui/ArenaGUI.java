@@ -8,14 +8,18 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -33,6 +37,9 @@ public class ArenaGUI extends JPanel {
     private static final int INPUT_TICK_MS = 50;
     private static final int RENDER_TICK_MS = 16;
     private static final double POSITION_SMOOTHING = 0.35;
+    private static final int LEADERBOARD_WIDTH = 390;
+    private static final int LEADERBOARD_ROW_HEIGHT = 30;
+    private static final int LEADERBOARD_PADDING = 20;
 
     private JLabel timerLabel;
     private JLabel scoreLabel;
@@ -97,14 +104,26 @@ public class ArenaGUI extends JPanel {
                 super.paintComponent(g);
                 LocalGameState state = GameClient.localState;
                 Graphics2D g2d = (Graphics2D) g.create();
-                double scaleX = getWidth() / (double) ARENA_WIDTH;
-                double scaleY = getHeight() / (double) ARENA_HEIGHT;
+                double scale = Math.min(
+                        getWidth() / (double) ARENA_WIDTH,
+                        getHeight() / (double) ARENA_HEIGHT);
+                int viewportWidth = (int) Math.round(ARENA_WIDTH * scale);
+                int viewportHeight = (int) Math.round(ARENA_HEIGHT * scale);
+                int offsetX = (getWidth() - viewportWidth) / 2;
+                int offsetY = (getHeight() - viewportHeight) / 2;
+
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
                 // Background
-                g2d.setColor(new Color(173, 216, 230));
+                g2d.setColor(new Color(32, 44, 56));
                 g2d.fillRect(0, 0, getWidth(), getHeight());
 
-                g2d.scale(scaleX, scaleY);
+                g2d.translate(offsetX, offsetY);
+                g2d.scale(scale, scale);
+
+                g2d.setColor(new Color(173, 216, 230));
+                g2d.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
                 // Grid
                 g2d.setColor(new Color(255, 255, 255, 80));
@@ -155,6 +174,10 @@ public class ArenaGUI extends JPanel {
                     if (p.hasWeapon) {
                         g2d.drawString("Freeze", drawX - 15, drawY + 40);
                     }
+                }
+
+                if (state.isFinal || pressedKeys.contains(KeyEvent.VK_TAB)) {
+                    drawLeaderboardOverlay(g2d, state);
                 }
                 g2d.dispose();
             }
@@ -321,5 +344,200 @@ public class ArenaGUI extends JPanel {
             case "CONTESTED" -> new Color(255, 165, 0, 100);
             default -> new Color(200, 200, 200, 80);
         };
+    }
+
+    private void drawLeaderboardOverlay(Graphics2D g2d, LocalGameState state) {
+        List<LeaderboardEntry> entries = buildLeaderboardEntries(state);
+
+        int titleHeight = 34;
+        int headerHeight = 28;
+        int footerHeight = state.isFinal ? 28 : 0;
+        int tableTop = yPositionForLeaderboardTitle();
+        int rowAreaTop = tableTop + titleHeight + headerHeight;
+        int rowCount = Math.max(1, entries.size());
+        int height = rowAreaTop - 70 + footerHeight + rowCount * LEADERBOARD_ROW_HEIGHT + 18;
+        int x = (ARENA_WIDTH - LEADERBOARD_WIDTH) / 2;
+        int y = 70;
+        int contentLeft = x + LEADERBOARD_PADDING;
+        int contentRight = x + LEADERBOARD_WIDTH - LEADERBOARD_PADDING;
+        int rankX = contentLeft;
+        int playerX = contentLeft + 26;
+        int scoreRightX = contentRight - 86;
+        int stateCenterX = contentRight - 34;
+
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2d.setColor(new Color(10, 18, 28, 225));
+        g2d.fillRoundRect(x, y, LEADERBOARD_WIDTH, height, 18, 18);
+
+        g2d.setColor(new Color(130, 190, 255));
+        g2d.setStroke(new BasicStroke(2f));
+        g2d.drawRoundRect(x, y, LEADERBOARD_WIDTH, height, 18, 18);
+
+        g2d.setColor(new Color(255, 255, 255, 16));
+        g2d.fillRoundRect(x + 10, y + 10, LEADERBOARD_WIDTH - 20, 34, 14, 14);
+
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("DialogInput", Font.BOLD, 21));
+        g2d.drawString(state.isFinal ? "Final Leaderboard" : "Leaderboard", contentLeft, y + 32);
+
+        g2d.setColor(new Color(120, 170, 220, 180));
+        g2d.drawLine(contentLeft, y + titleHeight + 12, contentRight, y + titleHeight + 12);
+
+        g2d.setFont(new Font("DialogInput", Font.BOLD, 12));
+        g2d.setColor(new Color(210, 225, 245));
+        g2d.drawString("#", rankX, y + titleHeight + 28);
+        g2d.drawString("Player", playerX, y + titleHeight + 28);
+        drawRightAlignedString(g2d, "Score", scoreRightX, y + titleHeight + 28);
+        drawCenteredString(g2d, "State", stateCenterX, y + titleHeight + 28);
+
+        for (int i = 0; i < entries.size(); i++) {
+            LeaderboardEntry entry = entries.get(i);
+            int rowTop = rowAreaTop + i * LEADERBOARD_ROW_HEIGHT;
+            int rowHeight = LEADERBOARD_ROW_HEIGHT - 4;
+
+            if (entry.isMe) {
+                g2d.setColor(new Color(70, 130, 190, 205));
+                g2d.fillRoundRect(x + 10, rowTop, LEADERBOARD_WIDTH - 20, rowHeight, 12, 12);
+            } else if (i % 2 == 0) {
+                g2d.setColor(new Color(255, 255, 255, 16));
+                g2d.fillRoundRect(x + 10, rowTop, LEADERBOARD_WIDTH - 20, rowHeight, 12, 12);
+            }
+
+            int baselineY = rowTop + 20;
+            g2d.setFont(new Font("DialogInput", Font.BOLD, 12));
+            g2d.setColor(new Color(180, 210, 240));
+            g2d.drawString(String.valueOf(i + 1), rankX, baselineY);
+
+            g2d.setColor(Color.WHITE);
+            g2d.drawString(fitText(g2d, entry.name, 145), playerX, baselineY);
+
+            g2d.setFont(new Font("DialogInput", Font.PLAIN, 11));
+            g2d.setColor(new Color(200, 210, 220));
+            drawRightAlignedString(g2d, entry.score + " pts", scoreRightX, baselineY);
+
+            drawStatusChip(g2d, entry.status, stateCenterX, rowTop + 5);
+        }
+
+        if (state.isFinal) {
+            g2d.setFont(new Font("DialogInput", Font.PLAIN, 10));
+            g2d.setColor(new Color(190, 205, 225));
+            g2d.drawString("Final scores from the server", contentLeft, y + height - 9);
+        }
+    }
+
+    private int yPositionForLeaderboardTitle() {
+        return 86;
+    }
+
+    private void drawRightAlignedString(Graphics2D g2d, String text, int rightX, int baselineY) {
+        int width = g2d.getFontMetrics().stringWidth(text);
+        g2d.drawString(text, rightX - width, baselineY);
+    }
+
+    private void drawCenteredString(Graphics2D g2d, String text, int centerX, int baselineY) {
+        int width = g2d.getFontMetrics().stringWidth(text);
+        g2d.drawString(text, centerX - (width / 2), baselineY);
+    }
+
+    private String fitText(Graphics2D g2d, String text, int maxWidth) {
+        if (g2d.getFontMetrics().stringWidth(text) <= maxWidth) {
+            return text;
+        }
+
+        String ellipsis = "...";
+        int ellipsisWidth = g2d.getFontMetrics().stringWidth(ellipsis);
+        StringBuilder shortened = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            String next = shortened.toString() + text.charAt(i);
+            if (g2d.getFontMetrics().stringWidth(next) + ellipsisWidth > maxWidth) {
+                break;
+            }
+            shortened.append(text.charAt(i));
+        }
+        return shortened + ellipsis;
+    }
+
+    private void drawStatusChip(Graphics2D g2d, String status, int centerX, int topY) {
+        Color fillColor = switch (status) {
+            case "Frozen" -> new Color(120, 190, 255, 190);
+            case "Freeze" -> new Color(132, 98, 255, 190);
+            case "Final" -> new Color(255, 196, 72, 190);
+            default -> new Color(88, 174, 120, 190);
+        };
+
+        Color textColor = switch (status) {
+            case "Final" -> new Color(60, 40, 0);
+            default -> Color.WHITE;
+        };
+
+        g2d.setFont(new Font("DialogInput", Font.BOLD, 10));
+        int textWidth = g2d.getFontMetrics().stringWidth(status);
+        int chipWidth = Math.max(56, textWidth + 16);
+        int chipX = centerX - (chipWidth / 2);
+
+        g2d.setColor(fillColor);
+        g2d.fillRoundRect(chipX, topY, chipWidth, 18, 10, 10);
+
+        g2d.setColor(textColor);
+        drawCenteredString(g2d, status, centerX, topY + 13);
+    }
+
+    private String buildStatusLabel(LocalGameState.PlayerData player) {
+        if (player.frozen) {
+            return "Frozen";
+        }
+        if (player.hasWeapon) {
+            return "Freeze";
+        }
+        return "Active";
+    }
+
+    private List<LeaderboardEntry> buildLeaderboardEntries(LocalGameState state) {
+        List<LeaderboardEntry> entries = new ArrayList<>();
+
+        if (state.isFinal && !state.finalScores.isEmpty()) {
+            for (LocalGameState.FinalScoreData finalScore : state.finalScores) {
+                LeaderboardEntry entry = new LeaderboardEntry();
+                entry.name = finalScore.name;
+                entry.score = finalScore.score;
+                entry.status = "Final";
+                entry.isMe = isLocalPlayerName(finalScore.name);
+                entries.add(entry);
+            }
+            return entries;
+        }
+
+        List<LocalGameState.PlayerData> players = new ArrayList<>(state.players.values());
+        players.sort(Comparator
+                .comparingInt((LocalGameState.PlayerData p) -> p.score).reversed()
+                .thenComparing(p -> p.name, String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(p -> p.id));
+
+        for (LocalGameState.PlayerData player : players) {
+            LeaderboardEntry entry = new LeaderboardEntry();
+            entry.name = player.name;
+            entry.score = player.score;
+            entry.status = buildStatusLabel(player);
+            entry.isMe = player.id.equals(GameClient.myPlayerID);
+            entries.add(entry);
+        }
+
+        return entries;
+    }
+
+    private boolean isLocalPlayerName(String playerName) {
+        if (GameClient.myPlayerID == null) {
+            return false;
+        }
+
+        LocalGameState.PlayerData me = GameClient.localState.players.get(GameClient.myPlayerID);
+        return me != null && me.name.equals(playerName);
+    }
+
+    private static final class LeaderboardEntry {
+        String name;
+        int score;
+        String status;
+        boolean isMe;
     }
 }

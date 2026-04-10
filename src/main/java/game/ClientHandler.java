@@ -81,7 +81,7 @@ public class ClientHandler implements Runnable {
                 }
 
                 // Check round ended
-                if (!gameState.isRunning()) {
+                if (gameState.hasRoundEnded()) {
                     // Final scores already broadcast by GameLoop; just close cleanly
                     System.out.println("[ClientHandler] Round over, closing " + playerId);
                     break;
@@ -144,12 +144,16 @@ public class ClientHandler implements Runnable {
         String[] parts = firstLine.split("\\|", 2);
         String name = (parts.length > 1 && !parts[1].isBlank()) ? parts[1].trim() : "Unknown";
 
+
         // Register in game state — get back an assigned ID
         playerId = gameState.addPlayer(name);
 
         // Register writer with GameLoop BEFORE sending JOIN_OK so no STATE
         // packets are missed by the client
         gameLoop.registerClient(out);
+
+        // Start the round once the first player has fully joined.
+        gameState.startRound();
 
         // Tell the client their ID and which UDP port to send actions to
         // (client reads udpPort from game.properties itself, but we echo it

@@ -5,7 +5,7 @@ import java.util.UUID;
 /**
  * Item - A collectible on the map.
  *
- * Only ENERGY remains — WEAPON and SPEED removed to match GameClient.
+ * Only WEAPON and ENERGY remains — SPEED removed to match GameClient.
  *
  * @author Requiem493, help from claude.ai
  */

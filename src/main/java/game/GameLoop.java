@@ -45,12 +45,21 @@ public class GameLoop implements Runnable {
     @Override
     public void run() {
         System.out.println("[GameLoop] Started at " + TICK_RATE_MS + "ms/tick");
-        gameState.startRound();
-
         long lastTick = System.currentTimeMillis();
 
-        while (running && gameState.isRunning()) {
+        while (running) {
             long now = System.currentTimeMillis();
+
+            if (!gameState.hasRoundStarted()) {
+                lastTick = now;
+                sleepForTick(now);
+                continue;
+            }
+
+            if (!gameState.isRunning()) {
+                break;
+            }
+
             long delta = now - lastTick;
             lastTick = now;
 
@@ -80,16 +89,7 @@ public class GameLoop implements Runnable {
             broadcast(gameState.serializeLiveState());
 
             // Sleep to maintain tick rate
-            long elapsed = System.currentTimeMillis() - now;
-            long sleep = TICK_RATE_MS - elapsed;
-            if (sleep > 0) {
-                try {
-                    Thread.sleep(sleep);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
+            sleepForTick(now);
         }
 
         System.out.println("[GameLoop] Stopped.");
@@ -97,6 +97,21 @@ public class GameLoop implements Runnable {
 
     public void stop() {
         running = false;
+    }
+
+    private void sleepForTick(long tickStartMs) {
+        long elapsed = System.currentTimeMillis() - tickStartMs;
+        long sleep = TICK_RATE_MS - elapsed;
+        if (sleep <= 0) {
+            return;
+        }
+
+        try {
+            Thread.sleep(sleep);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            running = false;
+        }
     }
 
     // ── Broadcast helpers ─────────────────────────────────────────────────────
