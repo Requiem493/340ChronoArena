@@ -29,6 +29,7 @@ public class GameState {
     // Timing
     private final long roundDurationMs;
     private long roundStartTime;
+    private volatile boolean roundStarted = false;
     private volatile boolean running = false;
 
     // Players: playerID -> PlayerState
@@ -133,7 +134,12 @@ public class GameState {
     // GAME LIFECYCLE
     // ══════════════════════════════════════════════════════════════════════════
 
-    public void startRound() {
+    public synchronized void startRound() {
+        if (roundStarted) {
+            return;
+        }
+
+        roundStarted = true;
         roundStartTime = System.currentTimeMillis();
         running = true;
         spawnItems(5);
@@ -142,13 +148,25 @@ public class GameState {
                 + (roundDurationMs / 1000) + "s");
     }
 
-    public void endRound() {
+    public synchronized void endRound() {
+        if (!roundStarted || !running) {
+            return;
+        }
+
         running = false;
         System.out.println("[GameState] Round ended.");
     }
 
     public boolean isRunning() {
         return running;
+    }
+
+    public boolean hasRoundStarted() {
+        return roundStarted;
+    }
+
+    public boolean hasRoundEnded() {
+        return roundStarted && !running;
     }
 
     public long timeRemainingMs() {
