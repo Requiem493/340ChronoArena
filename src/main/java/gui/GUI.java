@@ -83,7 +83,7 @@ public class GUI {
         public void actionPerformed(ActionEvent event) {
 
             String playerInput = textBox.getText().trim();
-            String IP = IPtextBox.getText().trim();
+            String IP = new String(IPtextBox.getPassword()).trim();
 
             if (playerInput.isEmpty() || IP.isEmpty()) {
                 JOptionPane.showMessageDialog(null, "Please fill in all fields!");
