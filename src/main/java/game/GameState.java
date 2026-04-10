@@ -16,6 +16,9 @@ public class GameState {
     // Map dimensions — must match ZoneData.CENTRES in GameClient
     public static final int MAP_WIDTH = 800;
     public static final int MAP_HEIGHT = 600;
+    private static final int MOVE_SPEED = 5;
+    private static final int FREEZE_RANGE = 90;
+    private static final long FREEZE_DURATION_MS = 3000;
 
     // Timing
     private final long roundDurationMs;
@@ -163,6 +166,7 @@ public class GameState {
 
         switch (type) {
             case "MOVE" -> handleMove(p, args);
+            case "FREEZE" -> handleFreeze(p);
             default -> System.out.println("[GameState] Unknown action: " + type);
         }
     }
@@ -171,6 +175,16 @@ public class GameState {
     public void tickZones(long deltaMs) {
         for (Zone z : zones) {
             z.tick(deltaMs, players);
+        }
+    }
+
+    public void tickStatusEffects() {
+        long now = System.currentTimeMillis();
+        for (PlayerState p : players.values()) {
+            if (p.frozen && now >= p.frozenUntilMs) {
+                p.frozen = false;
+                p.frozenUntilMs = 0;
+            }
         }
     }
 
@@ -191,12 +205,14 @@ public class GameState {
         if (xy.length < 2)
             return;
 
+        if (p.frozen)
+            return;
+
         int dx = Integer.parseInt(xy[0]);
         int dy = Integer.parseInt(xy[1]);
-        int speed = 5;
 
-        int nx = Math.max(0, Math.min(MAP_WIDTH - 1, p.x + dx * speed));
-        int ny = Math.max(0, Math.min(MAP_HEIGHT - 1, p.y + dy * speed));
+        int nx = Math.max(0, Math.min(MAP_WIDTH - 1, p.x + dx * MOVE_SPEED));
+        int ny = Math.max(0, Math.min(MAP_HEIGHT - 1, p.y + dy * MOVE_SPEED));
         p.x = nx;
         p.y = ny;
 
@@ -206,12 +222,10 @@ public class GameState {
         }
 
         // Check item pickup
-        Iterator<Item> it = items.iterator();
-        while (it.hasNext()) {
-            Item item = it.next();
+        for (Item item : new ArrayList<>(items)) {
             if (item.overlaps(p.x, p.y)) {
                 applyItem(p, item);
-                it.remove();
+                items.remove(item);
                 System.out.println("[GameState] " + p.name + " picked up " + item.type);
             }
         }
@@ -221,7 +235,90 @@ public class GameState {
         // Only ENERGY exists — +15 pts
         if (item.type == Item.Type.ENERGY) {
             p.score += 15;
+        } else if (item.type == Item.Type.FREEZE_RAY) {
+            p.hasWeapon = true;
         }
+    }
+
+    private void handleFreeze(PlayerState attacker) {
+        if (attacker.frozen || !attacker.hasWeapon) {
+            return;
+        }
+
+        PlayerState target = findNearestTarget(attacker);
+        if (target == null) {
+            return;
+        }
+
+        target.frozen = true;
+        target.frozenUntilMs = System.currentTimeMillis() + FREEZE_DURATION_MS;
+        attacker.hasWeapon = false;
+        System.out.println("[GameState] " + attacker.name + " froze " + target.name);
+    }
+
+    private PlayerState findNearestTarget(PlayerState attacker) {
+        PlayerState nearest = null;
+        double nearestDistance = FREEZE_RANGE + 1.0;
+
+        for (PlayerState candidate : players.values()) {
+            if (candidate == attacker || candidate.killed) {
+                continue;
+            }
+
+            double distance = Math.hypot(candidate.x - attacker.x, candidate.y - attacker.y);
+            if (distance <= FREEZE_RANGE && distance < nearestDistance) {
+                nearest = candidate;
+                nearestDistance = distance;
+            }
+        }
+
+        return nearest;
+    }
+
+    public synchronized String serializeLiveState() {
+        StringBuilder sb = new StringBuilder("STATE|");
+        sb.append(timeRemainingMs()).append("|PLAYERS:");
+
+        boolean first = true;
+        for (PlayerState p : players.values()) {
+            if (!first) {
+                sb.append(',');
+            }
+            sb.append(p.id).append(':')
+                    .append(p.name).append(':')
+                    .append(p.x).append(':')
+                    .append(p.y).append(':')
+                    .append(p.score).append(':')
+                    .append(p.frozen ? 1 : 0).append(':')
+                    .append(p.hasWeapon ? 1 : 0).append(':')
+                    .append(0);
+            first = false;
+        }
+
+        sb.append("|ZONES:");
+        first = true;
+        for (Zone z : zones) {
+            if (!first) {
+                sb.append(',');
+            }
+            sb.append(z.serialize());
+            first = false;
+        }
+
+        sb.append("|ITEMS:");
+        first = true;
+        for (Item item : items) {
+            if (!first) {
+                sb.append(',');
+            }
+            sb.append(item.id).append(':')
+                    .append(item.type).append(':')
+                    .append(item.x).append(':')
+                    .append(item.y);
+            first = false;
+        }
+
+        return sb.toString();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -326,7 +423,8 @@ public class GameState {
         for (int i = 0; i < count; i++) {
             int x = 20 + rng.nextInt(MAP_WIDTH - 40);
             int y = 20 + rng.nextInt(MAP_HEIGHT - 40);
-            items.add(new Item(Item.Type.ENERGY, x, y));
+            Item.Type type = rng.nextInt(4) == 0 ? Item.Type.FREEZE_RAY : Item.Type.ENERGY;
+            items.add(new Item(type, x, y));
         }
     }
 

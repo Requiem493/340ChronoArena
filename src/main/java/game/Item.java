@@ -12,7 +12,8 @@ import java.util.UUID;
 public class Item {
 
     public enum Type {
-        ENERGY
+        ENERGY,
+        FREEZE_RAY
     }
 
     public final String id;

@@ -62,6 +62,9 @@ public class GameLoop implements Runnable {
             // 2. Tick zone capture/grace logic and award points
             gameState.tickZones(delta);
 
+            // 2b. Expire temporary status effects like freeze
+            gameState.tickStatusEffects();
+
             // 3. Maybe spawn a new item
             gameState.maybeSpawnItem(TICK_RATE_MS);
 
@@ -74,7 +77,7 @@ public class GameLoop implements Runnable {
             }
 
             // 5. Broadcast state to all clients
-            broadcast(gameState.serialize());
+            broadcast(gameState.serializeLiveState());
 
             // Sleep to maintain tick rate
             long elapsed = System.currentTimeMillis() - now;

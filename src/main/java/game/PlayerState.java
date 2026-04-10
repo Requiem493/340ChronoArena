@@ -3,8 +3,6 @@ package game;
 /**
  * PlayerState - All mutable state for one player.
  *
- * Freeze and speed boost removed to match GameClient.
- *
  * @author Requiem493, help from claude.ai
  */
 public class PlayerState {
@@ -20,6 +18,11 @@ public class PlayerState {
     // Score
     public int score = 0;
 
+    // Temporary status effects / inventory
+    public boolean frozen = false;
+    public boolean hasWeapon = false;
+    public long frozenUntilMs = 0;
+
     // Kill-switch flag: ClientHandler polls this and closes socket if true
     public volatile boolean killed = false;
 
@@ -32,6 +35,7 @@ public class PlayerState {
 
     @Override
     public String toString() {
-        return id + "(" + name + ") pos=(" + x + "," + y + ") score=" + score;
+        return id + "(" + name + ") pos=(" + x + "," + y + ") score=" + score
+                + " frozen=" + frozen + " weapon=" + hasWeapon;
     }
 }

@@ -92,17 +92,29 @@ public class GUI {
             else{
                 GameClient.name = playerInput;
                 String finalIP = IP;
+                startButton.setEnabled(false);
                 new Thread(() -> {
                     try {
-                        GameClient.main(new String[]{finalIP});
+                        GameClient.connect(finalIP);
+                        SwingUtilities.invokeLater(GUI.this::showArenaScreen);
                     } catch (Exception e) {
-                        SwingUtilities.invokeLater(() ->
-                            JOptionPane.showMessageDialog(null, "Could not connect!"));
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(null, "Could not connect!");
+                            startButton.setEnabled(true);
+                        });
                     }
                 }).start(); 
             }
         }
         });  
+    }
+
+    private void showArenaScreen() {
+        ArenaGUI arenaGUI = new ArenaGUI();
+        frame.setContentPane(arenaGUI);
+        frame.revalidate();
+        frame.repaint();
+        arenaGUI.focusArena();
     }
 
     public static void main(String[] args) {

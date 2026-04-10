@@ -44,8 +44,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class GameClient {
 
     public static String serverIP;
-    static int tcpPort = 8000;
-    static int udpPort = 9000;
+    public static int tcpPort = 8000;
+    public static int udpPort = 9000;
     public static String name = ""; 
 
     // tcp port should be 8000, udp port should be 9000, server IP can change
@@ -54,17 +54,17 @@ public class GameClient {
     }
 
     // Session info (set after JOIN_OK)
-    static volatile String myPlayerID = null;
+    public static volatile String myPlayerID = null;
     static volatile String myName = null;
 
     // Latest game state written by TCPListener, read by main
-    static volatile LocalGameState localState = new LocalGameState();
+    public static volatile LocalGameState localState = new LocalGameState();
 
     // Network handles
-    static Socket tcpSocket;
-    static BufferedWriter tcpOut;
-    static DatagramSocket udpSocket;
-    static InetAddress serverAddr;
+    public static Socket tcpSocket;
+    public static BufferedWriter tcpOut;
+    public static DatagramSocket udpSocket;
+    public static InetAddress serverAddr;
 
     // MAIN
 
@@ -149,13 +149,13 @@ public class GameClient {
                     case "wd", "dw" -> udp.sendMove(1, -1);
                     case "sa", "as" -> udp.sendMove(-1, 1);
                     case "sd", "ds" -> udp.sendMove(1, 1);
-                    // case "f" -> freezeNearest(udp);
+                    case "f" -> udp.sendFreeze();
                     case "state" -> printState();
                     case "help" -> printControls();
                     case "quit", "exit", "q" -> {
                         writeTCP("QUIT");
                         System.out.println("Leaving game. Goodbye!");
-                        return; // try-with-resources closes everything
+                        return;
                     }
                     default -> System.out.println("Unknown command. Type 'help' for controls.");
                 }
@@ -178,22 +178,16 @@ public class GameClient {
                 String line;
                 while ((line = in.readLine()) != null) {
                     if (line.startsWith("STATE|")) {
-                        // Update shared state quietly — player types 'state' to see it
                         localState = LocalGameState.parse(line);
-
                     } else if (line.startsWith("FINAL|")) {
                         localState = LocalGameState.parseFinal(line);
                         printFinalScores(line);
-
                     } else if (line.startsWith("KILLED|")) {
-                        System.out.println("\n[SERVER] You were removed: "
-                                + line.substring(7));
+                        System.out.println("\n[SERVER] You were removed: " + line.substring(7));
                         System.exit(0);
-
                     } else if (line.startsWith("BYE|")) {
                         System.out.println("[SERVER] " + line.substring(4));
                         System.exit(0);
-
                     } else {
                         System.out.println("[SERVER] " + line);
                     }
@@ -232,6 +226,10 @@ public class GameClient {
             send("MOVE|" + dx + "|" + dy);
         }
 
+        void sendFreeze() {
+            send("FREEZE");
+        }
+
         private void send(String action) {
             if (myPlayerID == null)
                 return;
@@ -248,27 +246,27 @@ public class GameClient {
 
     // LOCAL GAME STATE (parsed from STATE broadcast)
 
-    static class LocalGameState {
-        long timeRemainingMs = 0;
-        boolean isFinal = false;
-        Map<String, PlayerData> players = new LinkedHashMap<>();
-        List<ZoneData> zones = new ArrayList<>();
-        List<ItemData> items = new ArrayList<>();
+    public static class LocalGameState {
+        public long timeRemainingMs = 0;
+        public boolean isFinal = false;
+        public Map<String, PlayerData> players = new LinkedHashMap<>();
+        public List<ZoneData> zones = new ArrayList<>();
+        public List<ItemData> items = new ArrayList<>();
 
-        static class PlayerData {
-            String id, name;
-            int x, y, score;
-            boolean frozen, hasWeapon, speedBoost;
+        public static class PlayerData {
+            public String id, name;
+            public int x, y, score;
+            public boolean frozen, hasWeapon, speedBoost;
         }
 
-        static class ZoneData {
-            String id, owner, status;
-            double capturePercent;
+        public static class ZoneData {
+            public String id, owner, status;
+            public double capturePercent;
         }
 
-        static class ItemData {
-            String id, type;
-            int x, y;
+        public static class ItemData {
+            public String id, type;
+            public int x, y;
         }
 
         // STATE|<timeMs>|PLAYERS:<p,...>|ZONES:<z,...>|ITEMS:<i,...>
@@ -293,7 +291,7 @@ public class GameClient {
                         p.x = Integer.parseInt(f[2]);
                         p.y = Integer.parseInt(f[3]);
                         p.score = Integer.parseInt(f[4]);
-                        // p.frozen = f[5].equals("1");
+                        p.frozen = f[5].equals("1");
                         p.hasWeapon = f[6].equals("1");
                         // p.speedBoost = f[7].equals("1");
                         s.players.put(p.id, p);
@@ -354,11 +352,11 @@ public class GameClient {
         System.out.println("PLAYERS:");
         for (LocalGameState.PlayerData p : s.players.values()) {
             String me = p.id.equals(myPlayerID) ? " <- YOU" : "";
-            // String frozen = p.frozen ? " [FROZEN]" : "";
+            String frozen = p.frozen ? " [FROZEN]" : "";
             String weapon = p.hasWeapon ? " [WEAPON]" : "";
             // String speed = p.speedBoost ? " [SPEED]" : "";
             System.out.printf("  %-4s %-12s pos=(%3d,%3d) score=%-5d%s%s%n",
-                    p.id, p.name, p.x, p.y, p.score, weapon, me);
+                    p.id, p.name, p.x, p.y, p.score, frozen, weapon + me);
         }
 
         System.out.println("ZONES:");
@@ -385,13 +383,13 @@ public class GameClient {
         System.out.println("=".repeat(40));
         System.out.println("  w / s / a / d    Move up/down/left/right");
         System.out.println("  wa wd sa sd      Diagonal movement");
-        // System.out.println(" f Freeze nearest player");
+        System.out.println("  f                Use freeze-ray weapon");
         System.out.println("  state            Print current game state");
         System.out.println("  help             Show this menu");
         System.out.println("  quit             Leave the game");
         System.out.println("=".repeat(40));
         System.out.println("Walk near items to collect (server detects on MOVE).");
-        System.out.println("Items: ENERGY=+15pts\n");
+        System.out.println("Items: ENERGY=+15pts, FREEZE_RAY=freeze nearest player\n");
     }
 
     // HELPERS
@@ -413,10 +411,8 @@ public class GameClient {
             try (FileInputStream fis = new FileInputStream(file)) {
                 props.load(fis);
                 serverIP = props.getProperty("server.ip", serverIP);
-                tcpPort = Integer.parseInt(
-                        props.getProperty("server.tcp.port", "" + tcpPort));
-                udpPort = Integer.parseInt(
-                        props.getProperty("server.udp.port", "" + udpPort));
+                tcpPort = Integer.parseInt(props.getProperty("server.tcp.port", "" + tcpPort));
+                udpPort = Integer.parseInt(props.getProperty("server.udp.port", "" + udpPort));
                 System.out.println("[Client] Config loaded from game.properties");
             } catch (IOException e) {
                 System.err.println("[Client] Could not read game.properties — using defaults");
@@ -424,5 +420,77 @@ public class GameClient {
         } else {
             System.out.println("[Client] game.properties not found — will prompt for IP");
         }
+    }
+
+    public static synchronized void connect(String IP) throws Exception {
+        disconnect();
+
+        serverIP = IP;
+        myName = name;
+        localState = new LocalGameState();
+
+        try {
+            tcpSocket = new Socket(serverIP, tcpPort);
+            udpSocket = new DatagramSocket();
+            tcpSocket.setKeepAlive(true);
+            tcpSocket.setTcpNoDelay(true);
+
+            System.out.println("Connecting to " + serverIP + ":" + tcpPort + " ...");
+            tcpOut = new BufferedWriter(new OutputStreamWriter(tcpSocket.getOutputStream()));
+            BufferedReader tcpIn = new BufferedReader(
+                    new InputStreamReader(tcpSocket.getInputStream()));
+
+            writeTCP("JOIN|" + myName);
+
+            String joinReply = tcpIn.readLine();
+            if (joinReply == null || !joinReply.startsWith("JOIN_OK|")) {
+                throw new IOException("Server rejected join: " + joinReply);
+            }
+
+            String[] joinParts = joinReply.split("\\|");
+            myPlayerID = joinParts[1];
+            System.out.println("Joined successfully - you are " + myName + " [" + myPlayerID + "]");
+
+            serverAddr = InetAddress.getByName(serverIP);
+
+            Thread tcpThread = new Thread(new TCPListener(tcpIn));
+            tcpThread.setDaemon(true);
+            tcpThread.setName("TCP-Listener");
+            tcpThread.start();
+        } catch (Exception e) {
+            disconnect();
+            throw e;
+        }
+    }
+
+    public static synchronized void disconnect() {
+        myPlayerID = null;
+        myName = null;
+        localState = new LocalGameState();
+
+        if (tcpOut != null) {
+            try {
+                tcpOut.close();
+            } catch (IOException e) {
+                System.err.println("[Client] Could not close TCP output: " + e.getMessage());
+            }
+            tcpOut = null;
+        }
+
+        if (tcpSocket != null) {
+            try {
+                tcpSocket.close();
+            } catch (IOException e) {
+                System.err.println("[Client] Could not close TCP socket: " + e.getMessage());
+            }
+            tcpSocket = null;
+        }
+
+        if (udpSocket != null) {
+            udpSocket.close();
+            udpSocket = null;
+        }
+
+        serverAddr = null;
     }
 }
