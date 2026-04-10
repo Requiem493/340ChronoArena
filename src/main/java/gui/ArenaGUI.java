@@ -10,27 +10,35 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 import game.GameClient;
 import game.GameClient.LocalGameState;
+import game.Zone;
 
 public class ArenaGUI extends JPanel {
+    private static final int ARENA_WIDTH = 800;
+    private static final int ARENA_HEIGHT = 600;
+    private static final int GRID_SIZE = 40;
+    private static final int INPUT_TICK_MS = 50;
+    private static final int RENDER_TICK_MS = 16;
+    private static final double POSITION_SMOOTHING = 0.35;
 
     private JLabel timerLabel;
     private JLabel scoreLabel;
     private JPanel arenaPanel;
-    private JButton upButton;
-    private JButton downButton;
-    private JButton leftButton;
-    private JButton rightButton;
-    private JButton freezeButton;
-    private JButton dashButton;
+    private final Set<Integer> pressedKeys = new HashSet<>();
+    private final Map<String, RenderPosition> renderedPlayers = new HashMap<>();
 
     // Local UDP sender — no changes needed to GameClient
     private final AtomicLong seq = new AtomicLong(0);
@@ -39,7 +47,6 @@ public class ArenaGUI extends JPanel {
         setLayout(new BorderLayout());
         buildHUD();
         buildArena();
-        buildControls();
         startRenderLoop();
     }
 
@@ -89,47 +96,38 @@ public class ArenaGUI extends JPanel {
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
                 LocalGameState state = GameClient.localState;
+                Graphics2D g2d = (Graphics2D) g.create();
+                double scaleX = getWidth() / (double) ARENA_WIDTH;
+                double scaleY = getHeight() / (double) ARENA_HEIGHT;
 
                 // Background
-                g.setColor(new Color(173, 216, 230));
-                g.fillRect(0, 0, getWidth(), getHeight());
+                g2d.setColor(new Color(173, 216, 230));
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+
+                g2d.scale(scaleX, scaleY);
 
                 // Grid
-                g.setColor(new Color(255, 255, 255, 80));
-                for (int x = 0; x < 800; x += 40) g.drawLine(x, 0, x, 600);
-                for (int y = 0; y < 600; y += 40) g.drawLine(0, y, 800, y);
+                g2d.setColor(new Color(255, 255, 255, 80));
+                for (int x = 0; x < ARENA_WIDTH; x += GRID_SIZE) g2d.drawLine(x, 0, x, ARENA_HEIGHT);
+                for (int y = 0; y < ARENA_HEIGHT; y += GRID_SIZE) g2d.drawLine(0, y, ARENA_WIDTH, y);
 
                 // Zones
-                Graphics2D g2d = (Graphics2D) g;
                 g2d.setStroke(new BasicStroke(3));
                 for (LocalGameState.ZoneData z : state.zones) {
-                    int[] pos = getZonePos(z.id);
-                    Color zoneColor = getZoneColor(z.status);
-                    g2d.setColor(zoneColor);
-                    g2d.fillRect(pos[0], pos[1], 100, 80);
-                    g2d.setColor(zoneColor.darker());
-                    g2d.drawRect(pos[0], pos[1], 100, 80);
-                    g.setColor(Color.BLACK);
-                    g.setFont(new Font("DialogInput", Font.BOLD, 12));
-                    g.drawString(z.id, pos[0] + 35, pos[1] + 25);
-                    g.setFont(new Font("DialogInput", Font.PLAIN, 10));
-                    g.drawString(z.status, pos[0] + 5, pos[1] + 45);
-                    if (!z.owner.equals("NONE")) {
-                        g.drawString(z.owner, pos[0] + 5, pos[1] + 60);
-                    }
+                    drawZone(g2d, z);
                 }
 
                 // Items (coins)
                 for (LocalGameState.ItemData item : state.items) {
                     if ("FREEZE_RAY".equals(item.type)) {
-                        g.setColor(new Color(120, 240, 255));
-                        g.fillRect(item.x - 10, item.y - 10, 20, 20);
+                        g2d.setColor(new Color(120, 240, 255));
+                        g2d.fillRect(item.x - 10, item.y - 10, 20, 20);
                         g2d.setColor(new Color(40, 120, 180));
                         g2d.setStroke(new BasicStroke(2));
                         g2d.drawRect(item.x - 10, item.y - 10, 20, 20);
                     } else {
-                        g.setColor(new Color(255, 215, 0));
-                        g.fillOval(item.x - 8, item.y - 8, 16, 16);
+                        g2d.setColor(new Color(255, 215, 0));
+                        g2d.fillOval(item.x - 8, item.y - 8, 16, 16);
                         g2d.setColor(new Color(200, 160, 0));
                         g2d.setStroke(new BasicStroke(2));
                         g2d.drawOval(item.x - 8, item.y - 8, 16, 16);
@@ -138,69 +136,103 @@ public class ArenaGUI extends JPanel {
 
                 // Players
                 for (LocalGameState.PlayerData p : state.players.values()) {
+                    RenderPosition renderPos = renderedPlayers.computeIfAbsent(
+                            p.id,
+                            ignored -> new RenderPosition(p.x, p.y));
+                    int drawX = (int) Math.round(renderPos.x);
+                    int drawY = (int) Math.round(renderPos.y);
                     boolean isMe = p.id.equals(GameClient.myPlayerID);
                     Color playerColor = isMe ? new Color(50, 150, 255) : new Color(220, 60, 60);
                     if (p.frozen) {
                         playerColor = new Color(140, 220, 255);
                     }
-                    g.setColor(playerColor);
-                    g.fillOval(p.x - 12, p.y - 12, 24, 24);
-                    g.setColor(Color.WHITE);
-                    g.setFont(new Font("DialogInput", Font.BOLD, 10));
-                    g.drawString(p.name, p.x - 15, p.y - 15);
-                    g.drawString(p.score + "pts", p.x - 15, p.y + 28);
+                    g2d.setColor(playerColor);
+                    g2d.fillOval(drawX - 12, drawY - 12, 24, 24);
+                    g2d.setColor(Color.WHITE);
+                    g2d.setFont(new Font("DialogInput", Font.BOLD, 10));
+                    g2d.drawString(p.name, drawX - 15, drawY - 15);
+                    g2d.drawString(p.score + "pts", drawX - 15, drawY + 28);
                     if (p.hasWeapon) {
-                        g.drawString("Freeze", p.x - 15, p.y + 40);
+                        g2d.drawString("Freeze", drawX - 15, drawY + 40);
                     }
                 }
+                g2d.dispose();
             }
         };
 
         arenaPanel.setPreferredSize(new Dimension(800, 600));
         arenaPanel.setFocusable(true);
+        arenaPanel.setFocusTraversalKeysEnabled(false);
         arenaPanel.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                switch (e.getKeyCode()) {
-                    case KeyEvent.VK_W, KeyEvent.VK_UP -> sendMove(0, -1);
-                    case KeyEvent.VK_S, KeyEvent.VK_DOWN -> sendMove(0, 1);
-                    case KeyEvent.VK_A, KeyEvent.VK_LEFT -> sendMove(-1, 0);
-                    case KeyEvent.VK_D, KeyEvent.VK_RIGHT -> sendMove(1, 0);
-                    case KeyEvent.VK_F, KeyEvent.VK_SPACE -> sendFreeze();
+                int keyCode = e.getKeyCode();
+                boolean isNewPress = pressedKeys.add(keyCode);
+                if (isNewPress && (keyCode == KeyEvent.VK_F || keyCode == KeyEvent.VK_SPACE)) {
+                    sendFreeze();
                 }
+            }
+
+            @Override
+            public void keyReleased(KeyEvent e) {
+                pressedKeys.remove(e.getKeyCode());
+            }
+        });
+
+        Timer inputTimer = new Timer(INPUT_TICK_MS, e -> {
+            int dx = 0;
+            int dy = 0;
+
+            if (pressedKeys.contains(KeyEvent.VK_W) || pressedKeys.contains(KeyEvent.VK_UP)) {
+                dy -= 1;
+            }
+            if (pressedKeys.contains(KeyEvent.VK_S) || pressedKeys.contains(KeyEvent.VK_DOWN)) {
+                dy += 1;
+            }
+            if (pressedKeys.contains(KeyEvent.VK_A) || pressedKeys.contains(KeyEvent.VK_LEFT)) {
+                dx -= 1;
+            }
+            if (pressedKeys.contains(KeyEvent.VK_D) || pressedKeys.contains(KeyEvent.VK_RIGHT)) {
+                dx += 1;
+            }
+
+            if (dx != 0 || dy != 0) {
+                sendMove(dx, dy);
+            }
+        });
+        inputTimer.start();
+
+        arenaPanel.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusLost(FocusEvent e) {
+                pressedKeys.clear();
             }
         });
 
         add(arenaPanel, BorderLayout.CENTER);
     }
 
-    private void buildControls() {
-        upButton = new JButton("UP");
-        downButton = new JButton("DOWN");
-        leftButton = new JButton("LEFT");
-        rightButton = new JButton("RIGHT");
-        freezeButton = new JButton("FREEZE");
-        dashButton = new JButton("DASH");
+    private void updateRenderedPlayers(LocalGameState state) {
+        renderedPlayers.keySet().removeIf(playerId -> !state.players.containsKey(playerId));
 
-        upButton.addActionListener(e -> sendMove(0, -1));
-        downButton.addActionListener(e -> sendMove(0, 1));
-        leftButton.addActionListener(e -> sendMove(-1, 0));
-        rightButton.addActionListener(e -> sendMove(1, 0));
-        freezeButton.addActionListener(e -> sendFreeze());
+        for (LocalGameState.PlayerData player : state.players.values()) {
+            RenderPosition renderPos = renderedPlayers.computeIfAbsent(
+                    player.id,
+                    ignored -> new RenderPosition(player.x, player.y));
+            renderPos.x += (player.x - renderPos.x) * POSITION_SMOOTHING;
+            renderPos.y += (player.y - renderPos.y) * POSITION_SMOOTHING;
 
-        JPanel controls = new JPanel(new FlowLayout());
-        controls.setBackground(new Color(40, 40, 40));
-        controls.add(leftButton);
-        controls.add(upButton);
-        controls.add(downButton);
-        controls.add(rightButton);
-        controls.add(freezeButton);
-        controls.add(dashButton);
-        add(controls, BorderLayout.SOUTH);
+            if (Math.abs(player.x - renderPos.x) < 0.1) {
+                renderPos.x = player.x;
+            }
+            if (Math.abs(player.y - renderPos.y) < 0.1) {
+                renderPos.y = player.y;
+            }
+        }
     }
 
     private void startRenderLoop() {
-        Timer timer = new Timer(50, e -> {
+        Timer timer = new Timer(RENDER_TICK_MS, e -> {
             LocalGameState state = GameClient.localState;
             long secs = state.timeRemainingMs / 1000;
             timerLabel.setText(String.format("Time: %02d:%02d", secs / 60, secs % 60));
@@ -209,16 +241,22 @@ public class ArenaGUI extends JPanel {
             if (GameClient.myPlayerID != null && state.players.containsKey(GameClient.myPlayerID)) {
                 LocalGameState.PlayerData me = state.players.get(GameClient.myPlayerID);
                 myScore = String.valueOf(me.score);
-                freezeButton.setEnabled(me.hasWeapon);
-                freezeButton.setText(me.hasWeapon ? "FREEZE READY" : "FREEZE");
-            } else {
-                freezeButton.setEnabled(false);
-                freezeButton.setText("FREEZE");
             }
+            updateRenderedPlayers(state);
             scoreLabel.setText("Score: " + myScore);
             arenaPanel.repaint();
         });
         timer.start();
+    }
+
+    private static final class RenderPosition {
+        double x;
+        double y;
+
+        RenderPosition(double x, double y) {
+            this.x = x;
+            this.y = y;
+        }
     }
 
     private int[] getZonePos(String zoneId) {
@@ -230,6 +268,50 @@ public class ArenaGUI extends JPanel {
             case "ZE" -> new int[]{500, 410};
             default -> new int[]{0, 0};
         };
+    }
+
+    private void drawZone(Graphics2D g2d, LocalGameState.ZoneData z) {
+        int[] pos = getZonePos(z.id);
+        int x = pos[0];
+        int y = pos[1];
+        int width = 100;
+        int height = 80;
+        int inset = 4;
+
+        Color zoneColor = getZoneColor(z.status);
+        Color outlineColor = zoneColor.darker();
+        Color baseFill = new Color(zoneColor.getRed(), zoneColor.getGreen(), zoneColor.getBlue(), 45);
+        Color progressFill = new Color(zoneColor.getRed(), zoneColor.getGreen(), zoneColor.getBlue(), 130);
+
+        g2d.setColor(baseFill);
+        g2d.fillRect(x, y, width, height);
+
+        int innerWidth = width - inset * 2;
+        int innerHeight = height - inset * 2;
+        double clampedPercent = Math.max(0.0, Math.min(1.0, z.capturePercent));
+        int filledHeight = (int) Math.round(innerHeight * clampedPercent);
+        if (filledHeight > 0) {
+            int fillY = y + inset + (innerHeight - filledHeight);
+            g2d.setColor(progressFill);
+            g2d.fillRect(x + inset, fillY, innerWidth, filledHeight);
+        }
+
+        g2d.setColor(outlineColor);
+        g2d.drawRect(x, y, width, height);
+
+        g2d.setColor(Color.BLACK);
+        g2d.setFont(new Font("DialogInput", Font.BOLD, 12));
+        g2d.drawString(z.id, x + 35, y + 25);
+        g2d.setFont(new Font("DialogInput", Font.PLAIN, 10));
+        g2d.drawString(z.status, x + 5, y + 45);
+
+        if (!z.owner.equals("NONE")) {
+            double secondsLeft = z.capturePercent * Zone.OWNERSHIP_DURATION_MS / 1000.0;
+            g2d.drawString(z.owner, x + 5, y + 58);
+            g2d.drawString(String.format("%.1fs left", secondsLeft), x + 5, y + 71);
+        } else if (clampedPercent > 0.0) {
+            g2d.drawString((int) Math.round(clampedPercent * 100) + "%", x + 5, y + 60);
+        }
     }
 
     private Color getZoneColor(String status) {

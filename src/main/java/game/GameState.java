@@ -33,8 +33,12 @@ public class GameState {
     private final List<Zone> zones;
 
     // Items
+    private static final int MAX_ITEMS_ON_MAP = 8;
+    private static final long MIN_ITEM_SPAWN_MS = 4000;
+    private static final long MAX_ITEM_SPAWN_MS = 6000;
     private final List<Item> items = new CopyOnWriteArrayList<>();
     private final Random rng = new Random();
+    private long nextItemSpawnInMs = randomSpawnDelayMs();
 
     // Action queue — UDP thread enqueues, GameLoop drains each tick
     private final ConcurrentLinkedQueue<String> actionQueue = new ConcurrentLinkedQueue<>();
@@ -127,6 +131,7 @@ public class GameState {
         roundStartTime = System.currentTimeMillis();
         running = true;
         spawnItems(5);
+        nextItemSpawnInMs = randomSpawnDelayMs();
         System.out.println("[GameState] Round started. Duration: "
                 + (roundDurationMs / 1000) + "s");
     }
@@ -188,10 +193,16 @@ public class GameState {
         }
     }
 
-    /** Randomly spawn a new item if the map is running low. */
+    /** Spawn one new item every 4-6 seconds, up to the map cap. */
     public void maybeSpawnItem(long tickMs) {
-        if (items.size() < 8 && rng.nextInt((int) (5000 / tickMs) + 1) == 0) {
+        nextItemSpawnInMs -= tickMs;
+        if (nextItemSpawnInMs > 0) {
+            return;
+        }
+
+        if (items.size() < MAX_ITEMS_ON_MAP) {
             spawnItems(1);
+            nextItemSpawnInMs = randomSpawnDelayMs();
         }
     }
 
@@ -420,12 +431,18 @@ public class GameState {
     }
 
     private void spawnItems(int count) {
-        for (int i = 0; i < count; i++) {
+        int itemsToSpawn = Math.min(count, MAX_ITEMS_ON_MAP - items.size());
+        for (int i = 0; i < itemsToSpawn; i++) {
             int x = 20 + rng.nextInt(MAP_WIDTH - 40);
             int y = 20 + rng.nextInt(MAP_HEIGHT - 40);
             Item.Type type = rng.nextInt(4) == 0 ? Item.Type.FREEZE_RAY : Item.Type.ENERGY;
             items.add(new Item(type, x, y));
         }
+    }
+
+    private long randomSpawnDelayMs() {
+        return MIN_ITEM_SPAWN_MS
+                + rng.nextInt((int) (MAX_ITEM_SPAWN_MS - MIN_ITEM_SPAWN_MS + 1));
     }
 
     public List<Zone> getZones() {

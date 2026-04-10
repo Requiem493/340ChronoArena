@@ -365,8 +365,11 @@ public class GameClient {
             String cap = z.status.equals("CAPTURING")
                     ? String.format(" (%.0f%%)", z.capturePercent * 100)
                     : "";
+            String remaining = z.owner.equals("NONE")
+                    ? ""
+                    : String.format(" (%.1fs left)", z.capturePercent * Zone.OWNERSHIP_DURATION_MS / 1000.0);
             System.out.printf("  %-4s %-10s owner=%-6s%s%n",
-                    z.id, z.status, owner, cap);
+                    z.id, z.status, owner, cap + remaining);
         }
 
         System.out.println("ITEMS (" + s.items.size() + " on map):");

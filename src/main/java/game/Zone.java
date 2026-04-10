@@ -1,6 +1,7 @@
 package game;
 
 import java.util.*;
+import java.util.Locale;
 
 /**
  * Zone - A capturable control zone on the map.
@@ -20,10 +21,15 @@ import java.util.*;
  */
 public class Zone {
 
-    public static final long CAPTURE_TIME_MS = 3_000; // 3s to capture
+    public static final long CAPTURE_TIME_MS = 7_000; // 7s to capture
+    public static final long OWNERSHIP_DURATION_MS = 7_000; // 7s of control after capture
     public static final long GRACE_PERIOD_MS = 5_000; // 5s grace when owner leaves
+    private static final long CAPTURE_DECAY_HALF_LIFE_MS = 2_000; // interrupted progress halves every 2s
+    private static final long OWNERSHIP_SCORE_HALF_LIFE_MS = 2_000; // owned-zone score halves every 2s
+    private static final long MIN_CAPTURE_PROGRESS_MS = 25; // tiny remnants are treated as zero
     public static final int POINTS_PER_TICK = 2; // points per game-loop tick
     public static final int ZONE_RADIUS = 50; // pixel radius for overlap
+    private static final double BASE_POINTS_PER_MS = (double) POINTS_PER_TICK / GameLoop.TICK_RATE_MS;
 
     public enum Status {
         UNCLAIMED, CAPTURING, CAPTURED, CONTESTED
@@ -44,6 +50,8 @@ public class Zone {
 
     // Grace timer
     private long graceStart = -1;
+    private long ownershipRemainingMs = 0;
+    private double pendingOwnedScore = 0.0;
 
     // Players currently inside this zone: playerID → entry timestamp
     private final Map<String, Long> playersInside = new LinkedHashMap<>();
@@ -74,20 +82,18 @@ public class Zone {
             System.out.println("[Zone " + id + "] " + p.name + " left");
         }
 
-        refreshStatus(p.id);
+        refreshStatus();
     }
 
     /** Called when a player disconnects. */
     public synchronized void onPlayerLeft(String pid) {
         playersInside.remove(pid);
         if (pid.equals(owner)) {
-            owner = null;
+            clearOwnership();
             status = Status.UNCLAIMED;
-            graceStart = -1;
         }
         if (pid.equals(capturingPlayer)) {
             capturingPlayer = null;
-            captureProgress = 0;
         }
     }
 
@@ -98,14 +104,28 @@ public class Zone {
     public synchronized void tick(long deltaMs, Map<String, PlayerState> allPlayers) {
         long now = System.currentTimeMillis();
 
+        if (owner != null && ownershipRemainingMs > 0) {
+            ownershipRemainingMs = Math.max(0, ownershipRemainingMs - deltaMs);
+            if (ownershipRemainingMs == 0) {
+                System.out.println("[Zone " + id + "] Ownership timer expired for " + owner);
+                expireOwnership();
+                return;
+            }
+        }
+
         switch (status) {
 
             case CAPTURED -> {
+                if (owner == null) {
+                    status = Status.UNCLAIMED;
+                    break;
+                }
                 // Owner is inside → award points
                 if (playersInside.containsKey(owner)) {
                     PlayerState ownerState = allPlayers.get(owner);
-                    if (ownerState != null)
-                        ownerState.score += POINTS_PER_TICK;
+                    if (ownerState != null) {
+                        awardOwnedPoints(ownerState, deltaMs);
+                    }
                     graceStart = -1; // reset grace since they're here
                 } else {
                     // Owner left — start or continue grace period
@@ -114,55 +134,67 @@ public class Zone {
                         System.out.println("[Zone " + id + "] Grace period started for " + owner);
                     } else if (now - graceStart > GRACE_PERIOD_MS) {
                         System.out.println("[Zone " + id + "] Grace expired — zone lost by " + owner);
-                        owner = null;
-                        status = Status.UNCLAIMED;
-                        graceStart = -1;
+                        expireOwnership();
                     }
                 }
             }
 
             case CAPTURING -> {
-                if (capturingPlayer != null && playersInside.containsKey(capturingPlayer)) {
+                if (playersInside.size() > 1) {
+                    status = Status.CONTESTED;
+                } else if (playersInside.size() == 1) {
+                    String sole = getSoleOccupant();
+                    if (capturingPlayer == null || !capturingPlayer.equals(sole)) {
+                        capturingPlayer = sole;
+                    }
                     captureProgress += deltaMs;
                     if (captureProgress >= CAPTURE_TIME_MS) {
-                        // Capture complete!
                         owner = capturingPlayer;
                         status = Status.CAPTURED;
                         captureProgress = 0;
                         capturingPlayer = null;
+                        graceStart = -1;
+                        ownershipRemainingMs = OWNERSHIP_DURATION_MS;
+                        pendingOwnedScore = 0.0;
                         System.out.println("[Zone " + id + "] Captured by " + owner);
                     }
                 } else {
-                    // Capturing player left mid-capture
+                    decayCaptureProgress(deltaMs);
                     capturingPlayer = null;
-                    captureProgress = 0;
                     status = Status.UNCLAIMED;
                 }
             }
 
             case CONTESTED -> {
-                // Contested: if only one player remains, they start/resume capturing
+                decayCaptureProgress(deltaMs);
                 if (playersInside.size() == 1) {
-                    String sole = playersInside.keySet().iterator().next();
-                    capturingPlayer = sole;
-                    captureProgress = 0; // reset — fairness rule
-                    status = Status.CAPTURING;
-                    System.out.println("[Zone " + id + "] Contest resolved → " + sole + " capturing");
+                    String sole = getSoleOccupant();
+                    if (owner != null && owner.equals(sole)) {
+                        status = Status.CAPTURED;
+                        capturingPlayer = null;
+                        graceStart = -1;
+                        System.out.println("[Zone " + id + "] Contest resolved - owner retained control");
+                    } else {
+                        capturingPlayer = sole;
+                        status = Status.CAPTURING;
+                        System.out.println("[Zone " + id + "] Contest resolved - " + sole + " capturing");
+                    }
                 } else if (playersInside.isEmpty()) {
-                    status = Status.UNCLAIMED;
+                    status = (owner != null) ? Status.CAPTURED : Status.UNCLAIMED;
                     capturingPlayer = null;
-                    captureProgress = 0;
                 }
             }
 
             case UNCLAIMED -> {
                 if (playersInside.size() == 1) {
                     capturingPlayer = playersInside.keySet().iterator().next();
-                    captureProgress = 0;
                     status = Status.CAPTURING;
                     System.out.println("[Zone " + id + "] " + capturingPlayer + " started capturing");
                 } else if (playersInside.size() > 1) {
+                    decayCaptureProgress(deltaMs);
                     status = Status.CONTESTED;
+                } else {
+                    decayCaptureProgress(deltaMs);
                 }
             }
         }
@@ -172,7 +204,7 @@ public class Zone {
     // HELPERS
     // ══════════════════════════════════════════════════════════════════════════
 
-    private void refreshStatus(String movedPlayer) {
+    private void refreshStatus() {
         int inside = playersInside.size();
 
         if (status == Status.CAPTURED && inside > 1) {
@@ -181,8 +213,62 @@ public class Zone {
             System.out.println("[Zone " + id + "] Contested!");
         } else if (status == Status.CAPTURING && inside > 1) {
             status = Status.CONTESTED;
+        }
+    }
+
+    private void decayCaptureProgress(long deltaMs) {
+        if (captureProgress <= 0) {
+            return;
+        }
+
+        double decayFactor = Math.pow(0.5, (double) deltaMs / CAPTURE_DECAY_HALF_LIFE_MS);
+        captureProgress = Math.round(captureProgress * decayFactor);
+        if (captureProgress < MIN_CAPTURE_PROGRESS_MS) {
             captureProgress = 0;
         }
+    }
+
+    private void awardOwnedPoints(PlayerState ownerState, long deltaMs) {
+        long elapsedOwnershipMs = OWNERSHIP_DURATION_MS - ownershipRemainingMs;
+        double scoreMultiplier = Math.pow(0.5, (double) elapsedOwnershipMs / OWNERSHIP_SCORE_HALF_LIFE_MS);
+        pendingOwnedScore += BASE_POINTS_PER_MS * deltaMs * scoreMultiplier;
+
+        int wholePoints = (int) pendingOwnedScore;
+        if (wholePoints > 0) {
+            ownerState.score += wholePoints;
+            pendingOwnedScore -= wholePoints;
+        }
+    }
+
+    private void expireOwnership() {
+        clearOwnership();
+        captureProgress = 0;
+
+        if (playersInside.isEmpty()) {
+            status = Status.UNCLAIMED;
+            capturingPlayer = null;
+        } else if (playersInside.size() == 1) {
+            capturingPlayer = getSoleOccupant();
+            status = Status.CAPTURING;
+            System.out.println("[Zone " + id + "] " + capturingPlayer + " started capturing");
+        } else {
+            capturingPlayer = null;
+            status = Status.CONTESTED;
+        }
+    }
+
+    private void clearOwnership() {
+        owner = null;
+        graceStart = -1;
+        ownershipRemainingMs = 0;
+        pendingOwnedScore = 0.0;
+    }
+
+    private String getSoleOccupant() {
+        if (playersInside.size() != 1) {
+            return null;
+        }
+        return playersInside.keySet().iterator().next();
     }
 
     public boolean contains(int px, int py) {
@@ -197,9 +283,16 @@ public class Zone {
         return Math.min(1.0, (double) captureProgress / CAPTURE_TIME_MS);
     }
 
+    public double controlPercent() {
+        if (owner != null && ownershipRemainingMs > 0) {
+            return Math.min(1.0, (double) ownershipRemainingMs / OWNERSHIP_DURATION_MS);
+        }
+        return capturePercent();
+    }
+
     /** Serialise for the STATE broadcast. Format: id:owner:status:capturePercent */
     public String serialize() {
         String ownerStr = (owner != null) ? owner : "NONE";
-        return id + ":" + ownerStr + ":" + status.name() + ":" + String.format("%.2f", capturePercent());
+        return id + ":" + ownerStr + ":" + status.name() + ":" + String.format(Locale.US, "%.2f", controlPercent());
     }
 }
