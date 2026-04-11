@@ -22,7 +22,7 @@ import java.net.Socket;
  * Server → Client: JOIN_OK|<playerID>|<udpPort>
  * STATE|<timeMs>|PLAYERS:...|ZONES:...|ITEMS:... (every tick)
  * FINAL|<name:score,...> (round end)
- * KILLED|You were removed by the server (kill-switch)
+ * KILLED|You were kicked by an admin (kill-switch)
  * ERROR|<code>|<message>
  *
  * @author Requiem493 help from claude.ai
@@ -75,7 +75,7 @@ public class ClientHandler implements Runnable {
                 // Check kill-switch flag (set by admin console)
                 PlayerState p = gameState.getPlayer(playerId);
                 if (p != null && p.killed) {
-                    sendLine("KILLED|You were removed by the server");
+                    sendLine("KILLED|You were kicked by an admin");
                     System.out.println("[ClientHandler] Kill-switch: " + playerId);
                     break;
                 }

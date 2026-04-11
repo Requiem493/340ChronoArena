@@ -1,5 +1,7 @@
 package game;
 
+import java.awt.Frame;
+import java.awt.GraphicsEnvironment;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -18,6 +20,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 
 /**
  * GameClient - Terminal-based ChronoArena client (no GUI for now).
@@ -183,18 +187,16 @@ public class GameClient {
                         localState = LocalGameState.parseFinal(line, localState);
                         printFinalScores(line);
                     } else if (line.startsWith("KILLED|")) {
-                        System.out.println("\n[SERVER] You were removed: " + line.substring(7));
-                        System.exit(0);
+                        handleForcedDisconnect(line.substring(7).trim(), 0);
                     } else if (line.startsWith("BYE|")) {
-                        System.out.println("[SERVER] " + line.substring(4));
-                        System.exit(0);
+                        handleGracefulDisconnect(line.substring(4), 0);
                     } else {
                         System.out.println("[SERVER] " + line);
                     }
                 }
+                handleGracefulDisconnect("Server closed the connection.", 0);
             } catch (IOException e) {
-                System.out.println("\n[CLIENT] Lost connection to server.");
-                System.exit(1);
+                handleGracefulDisconnect("Lost connection to server.", 1);
             }
         }
 
@@ -455,6 +457,57 @@ public class GameClient {
             }
         } else {
             System.out.println("[Client] game.properties not found — will prompt for IP");
+        }
+    }
+
+    private static void handleForcedDisconnect(String reason, int exitCode) {
+        String message = (reason == null || reason.isBlank())
+                ? "You have been kicked by an admin."
+                : reason;
+        System.out.println("\n[SERVER] " + message);
+        disconnect();
+        showPopupIfGui("Kicked", message);
+        System.exit(exitCode);
+    }
+
+    private static void handleGracefulDisconnect(String message, int exitCode) {
+        if (message != null && !message.isBlank()) {
+            System.out.println("\n[SERVER] " + message);
+        }
+        disconnect();
+        System.exit(exitCode);
+    }
+
+    private static void showPopupIfGui(String title, String message) {
+        if (GraphicsEnvironment.isHeadless()) {
+            return;
+        }
+
+        boolean hasVisibleFrame = false;
+        for (Frame frame : Frame.getFrames()) {
+            if (frame.isDisplayable()) {
+                hasVisibleFrame = true;
+                break;
+            }
+        }
+        if (!hasVisibleFrame) {
+            return;
+        }
+
+        Runnable showDialog = () -> JOptionPane.showMessageDialog(
+                null,
+                message,
+                title,
+                JOptionPane.WARNING_MESSAGE);
+
+        try {
+            if (SwingUtilities.isEventDispatchThread()) {
+                showDialog.run();
+            } else {
+                SwingUtilities.invokeAndWait(showDialog);
+            }
+        } catch (Exception e) {
+            System.err.println("[Client] Could not display popup: " + e.getMessage());
         }
     }
 
