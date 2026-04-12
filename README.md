@@ -15,41 +15,41 @@
 ### Server
 ####
 #### Main Thread (TCP 8000 and UDP 9000)
-####         |
-####         | spawns
-####        \/
+####            |
+####            | spawns
+####           \/
 #### ClientHandler Thread 1
 #### ClientHandler Thread 2
 #### ClientHandler Thread 3
 #### ClientHandler Thread n
 #### (TCP per client)
 #### UDP Receiver Thread (receives movement packets)
-####         |
-####         | all share
-####        \/
+####            |
+####            | all share
+####           \/
 #### GameState (authoritative state)
-####         |
-####         | contains
-####        \/
+####            |
+####            | contains
+####           \/
 #### Action Queue (ConcurrentLinkedQueue) 
 #### Players, Zones, Items
 ####
 ### Client
 ####
 #### GUI Thread (Swing EDT)
-####         |
-####         | spawns
-####        \/
+####            |
+####            | spawns
+####           \/
 #### TCP Listener thread 
 #### (receives STATE broadcasts)
 #### UDP Sender (sends movement packets)
-####         |
-####         | shared
-####        \/
+####            |
+####            | shared
+####           \/
 #### LocalGameState (parsed snapshot)
-####         |
-####         | renders
-####        \/
+####            |
+####            | renders
+####           \/
 #### ArenaGUI (repain every 16ms)
 
 ## Getting The Jar Files
