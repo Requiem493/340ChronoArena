@@ -12,7 +12,7 @@
 #### We created a Chrono Arena game using java swing for the front end and socket programming for the communication between the game and client. 
 
 ## Game Properties File
-#### server.ip=10.111.130.157
+#### server.ip=YOUR_SERVER_IP_HERE
 #### server.tcp.port=8000
 #### server.udp.port=9000
 
@@ -33,7 +33,7 @@
 ## Getting Into The Game
 ### As The Server
 #### You will need to enter this in your terminal
-#### java -jar mainserver.jar < IP address of computer > < TCP port number > < UDP port number > < number of seconds for the round >
+#### java -jar mainserver.jar < IP > < TCP port number > < UDP port number > < number of seconds for the round >
 ### As The Player
 #### You will need to enter this in your terminal
 #### java -jar gui.jar 
@@ -55,4 +55,4 @@
 #### Akshaj Illa: Backend, Server Logic, Some Games Logic(zones)
 
 ## Java Version
-#### Java 17
+#### Java 17 or higher
