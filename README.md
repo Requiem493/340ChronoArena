@@ -14,43 +14,13 @@
 ## Architecture
 ### Server
 ####
-#### Main Thread (TCP 8000 and UDP 9000)
-####            |
-####            | spawns
-####           \/
-#### ClientHandler Thread 1
-#### ClientHandler Thread 2
-#### ClientHandler Thread 3
-#### ClientHandler Thread n
-#### (TCP per client)
-#### UDP Receiver Thread (receives movement packets)
-####            |
-####            | all share
-####           \/
-#### GameState (authoritative state)
-####            |
-####            | contains
-####           \/
-#### Action Queue (ConcurrentLinkedQueue) 
-#### Players, Zones, Items
+#### Main Thread (TCP 8000 and UDP 9000) (spawns)-> ClientHandler Thread 1, ClientHandler Thread 2, ClientHandler Thread 3, ClientHandler Thread n (TCP per client)
+#### UDP Receiver Thread (receives movement packets) (all share)-> GameState (authoritative state) (conatins)-> Action Queue (ConcurrentLinkedQueue) and Players, Zones, Items
 ####
 ### Client
 ####
-#### GUI Thread (Swing EDT)
-####            |
-####            | spawns
-####           \/
-#### TCP Listener thread 
-#### (receives STATE broadcasts)
-#### UDP Sender (sends movement packets)
-####            |
-####            | shared
-####           \/
-#### LocalGameState (parsed snapshot)
-####            |
-####            | renders
-####           \/
-#### ArenaGUI (repain every 16ms)
+#### GUI Thread (Swing EDT) (spawns)-> TCP Listener thread (receives STATE broadcasts)
+#### UDP Sender (sends movement packets) (shared)-> LocalGameState (parsed snapshot) (renders)-> ArenaGUI (repain every 16ms)
 
 ## Getting The Jar Files
 #### The JAR files you will need are mainserver.jar for the main server and gui.jar for playing the game. If it doesn't run well on VS Code, you can run it in your computer terminal.
@@ -72,4 +42,4 @@
 ## Team Contributions
 #### Aiden Agas: GUI, Game Screen gameplay
 #### Aditi Baghel: GUI, Start Screen, ArenaGUI Connection
-#### Akshaj Illa: TCP, UDP, MultiThreading
+#### Akshaj Illa: Backend, Server Logic, Some Games Logic(zones)
